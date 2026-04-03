@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard – VIT Hostel</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="dashboard-body">
+    <header class="topbar">
+        <div class="topbar-left">
+            <img src="C:\Users\akshi\Dropbox\My PC (LAPTOP-FA4REI1V)\Downloads\files (3)\c6c2e9022f25f404fe108a4cfefab222.jpg" alt="VIT Logo" style="width: 32px; height: 32px;">
+            <span class="topbar-title">VIT Hostel Complaint System</span>
+        </div>
+        <div class="topbar-right">
+            <span class="role-badge student-badge">Student</span>
+            <a href="login.html" class="logout-link">Logout</a>
+        </div>
+    </header>
+
+    <div class="dashboard-container">
+        <div class="left-panel">
+            <div class="panel-card">
+                <h2 class="panel-heading">Submit a Complaint</h2>
+
+                <form id="complaintForm">
+                    <div class="form-group">
+                        <label>Student Name</label>
+                        <input type="text" id="stuName" placeholder="Your name" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Registration Number</label>
+                        <input type="text" id="stuReg" placeholder="e.g. 23BCE1234" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Hostel Type</label>
+                        <select id="hostelType">
+                            <option value="">-- Select Hostel --</option>
+                            <option value="mens">Men's Hostel</option>
+                            <option value="womens">Women's Hostel</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Hostel Block</label>
+                        <select id="hostelBlock">
+                            <option value="">-- Select Block --</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Room Number</label>
+                        <input type="text" id="roomNo" placeholder="e.g. 204">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Complaint Type</label>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="complaintType" value="Electricity Issue"> Electricity Issue
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="complaintType" value="Water Issue"> Water Issue
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="complaintType" value="WiFi Issue"> WiFi Issue
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="complaintType" value="Room Change Request"> Room Change Request
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="complaintType" value="Others"> Others
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea id="description" rows="4" placeholder="Describe your complaint..."></textarea>
+                    </div>
+
+                    <div class="form-group checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="isUrgent"> Mark as Urgent
+                        </label>
+                    </div>
+
+                    <p id="formError" class="error-msg" style="display:none;">Please fill in all required fields.</p>
+
+                    <button type="submit" class="btn btn-submit">Submit Complaint</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="right-panel">
+            <div class="panel-card">
+                <div class="complaints-header">
+                    <h2 class="panel-heading">My Complaints</h2>
+                    <div class="filter-group">
+                        <label>Filter by:</label>
+                        <select id="filterType">
+                            <option value="All">All</option>
+                            <option value="Electricity Issue">Electricity</option>
+                            <option value="Water Issue">Water</option>
+                            <option value="WiFi Issue">WiFi</option>
+                            <option value="Room Change Request">Room Change</option>
+                            <option value="Others">Others</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="complaintList">
+                    <p class="empty-msg">No complaints submitted yet.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
