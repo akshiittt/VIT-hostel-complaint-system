@@ -1,0 +1,23 @@
+{
+  "name": "vit-hostel-complaint-system",
+  "version": "1.0.0",
+  "description": "VIT Hostel Complaint and Request System - React version (Review 2)",
+  "homepage": "https://akshiittt.github.io/VIT-hostel-complaint-system",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.0.0",
+    "vite": "^4.4.0",
+    "gh-pages": "^5.0.0"
+  }
+}
