@@ -1,12 +1,13 @@
 import ComplaintForm from './ComplaintForm'
 import ComplaintList from './ComplaintList'
+import vitLogo from '../assets/vit-logo.jpg'
 
 function StudentDashboard({ complaints, addComplaint, onLogout }) {
   return (
     <div className="dashboard-body">
       <header className="topbar">
         <div className="topbar-left">
-          <img src="/images/c6c2e9022f25f404fe108a4cfefab222.jpg" alt="VIT Logo" style={{ width: '36px', height: '36px', objectFit: 'contain' }} />
+          <img src={vitLogo} alt="VIT Logo" style={{ width: '36px', height: '36px', objectFit: 'contain' }} />
           <span className="topbar-title">VIT Hostel Complaint System</span>
         </div>
         <div className="topbar-right">

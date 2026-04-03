@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import vitLogo from '../assets/vit-logo.jpg'
 
 function LoginPage({ onLogin }) {
   const [name, setName] = useState('')
@@ -28,7 +29,7 @@ function LoginPage({ onLogin }) {
       <div className="login-card">
         <div className="login-logo">
           <div className="logo-icon">
-            <img src="/images/c6c2e9022f25f404fe108a4cfefab222.jpg" alt="VIT Logo" style={{ width: '80px', height: '80px', objectFit: 'contain' }} />
+            <img src={vitLogo} alt="VIT Logo" style={{ width: '80px', height: '80px', objectFit: 'contain' }} />
           </div>
           <h1>VIT Hostel</h1>
           <p className="login-subtitle">Complaint & Request System</p>
