@@ -96,7 +96,7 @@ describe('LoginPage: register', () => {
     expect(screen.getByLabelText('Hostel Block')).toHaveValue('')
   })
 
-  it('rejects a password shorter than 6 characters without a request', async () => {
+  it('rejects a password shorter than 8 characters without a request', async () => {
     const fetchMock = stubFetch(async () => jsonResponse(201, {}))
     const user = userEvent.setup()
     render(<LoginPage onLogin={vi.fn()} />)
@@ -105,13 +105,13 @@ describe('LoginPage: register', () => {
     await user.type(screen.getByLabelText('Full Name'), 'Asha Rao')
     await user.type(screen.getByLabelText('Registration Number'), '23BCE1234')
     await user.type(screen.getByLabelText('Email'), 'asha@vitstudent.ac.in')
-    await user.type(screen.getByLabelText('Password'), '12345')
+    await user.type(screen.getByLabelText('Password'), '1234567')
     await user.selectOptions(screen.getByLabelText('Hostel Type'), "Women's Hostel")
     await user.selectOptions(screen.getByLabelText('Hostel Block'), 'B')
     await user.type(screen.getByLabelText('Room Number'), '204')
     await user.click(screen.getByRole('button', { name: 'Create Account' }))
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Password must be at least 6 characters.')
+    expect(screen.getByRole('alert')).toHaveTextContent('Password must be at least 8 characters.')
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -157,5 +157,26 @@ describe('LoginPage: validation messages', () => {
     stubFetch(async () => jsonResponse(200, {}))
     render(<LoginPage onLogin={vi.fn()} notice="Your session expired. Please log in again." />)
     expect(screen.getByRole('status')).toHaveTextContent('Your session expired. Please log in again.')
+  })
+})
+
+describe('LoginPage: registration number', () => {
+  it('rejects a registration number that is not in the VIT format without a request', async () => {
+    const fetchMock = stubFetch(async () => jsonResponse(201, {}))
+    const user = userEvent.setup()
+    render(<LoginPage onLogin={vi.fn()} />)
+    await goToRegister(user)
+
+    await user.type(screen.getByLabelText('Full Name'), 'Asha Rao')
+    await user.type(screen.getByLabelText('Registration Number'), 'X123')
+    await user.type(screen.getByLabelText('Email'), 'asha@vitstudent.ac.in')
+    await user.type(screen.getByLabelText('Password'), 'solid-pass-1')
+    await user.selectOptions(screen.getByLabelText('Hostel Type'), "Women's Hostel")
+    await user.selectOptions(screen.getByLabelText('Hostel Block'), 'B')
+    await user.type(screen.getByLabelText('Room Number'), '204')
+    await user.click(screen.getByRole('button', { name: 'Create Account' }))
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Please enter a valid registration number (e.g. 23BCE1234).')
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

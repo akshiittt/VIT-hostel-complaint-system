@@ -66,15 +66,22 @@ npm install
 npm run seed
 ```
 
-`SEED_WARDEN_PASSWORD` is **required** (at least 8 characters) for any non-local database. The script refuses to run without it. Only a `localhost` MongoDB falls back to the demo password `warden1234`. Running the seed again updates the existing warden's name and password. It refuses to touch an existing *student* account that uses the same email.
+`SEED_WARDEN_PASSWORD` is **required** (at least 12 characters) for any non-local database. The script refuses to run without it. Only a `localhost` MongoDB falls back to the demo password `warden1234`. Running the seed again updates the existing warden's name and password. It refuses to touch an existing *student* account that uses the same email.
 
 ## Security notes
 
 - **Rate limiting** is built into the API. Counts are stored in MongoDB (collection `ratelimits`), so all Vercel instances share them:
-  - login: 10 attempts per 15 minutes per email + IP. This is the limit that stops password guessing.
+  - login: 10 attempts per 15 minutes per email + IP, and 30 per hour per account from any number of IPs. Together these stop password guessing, including attacks spread across many machines.
   - login: 300 per 15 minutes per IP, and register: 100 per hour per IP. These are deliberately generous, because hostel WiFi puts many students behind one shared IP.
+  - complaints: 10 per hour per student, at most 3 marked urgent per day. The same description repeated within 10 minutes is rejected as a duplicate (409).
+  - password resets: 20 per hour per warden.
 
   Blocked requests get HTTP 429 with a `Retry-After` header. For extra protection you can also add a rule under Vercel → Firewall, but it isn't required.
+  The client IP comes from `X-Forwarded-For` **only on Vercel**, which sets the `VERCEL` variable and overwrites that header. Hosted anywhere else, the header is ignored, so it can't be spoofed to dodge the limits.
+- **Passwords:** students need at least 8 characters, and very common passwords are rejected. The warden password set by `npm run seed` needs at least 12.
+- **Logs:** one JSON line per request (method, path, status, ms, user id) plus `login`, `login_failed`, `password_changed`, `password_reset` and `db_unavailable` events, in Vercel → Logs. Request bodies, passwords, tokens and temporary passwords are never logged. Set `LOG_LEVEL=silent` to turn logging off.
+- **Warden resets** record `passwordResetAt` and `passwordResetBy` on the student, and the student sees when the reset happened.
+- **Database outage:** API calls return 503 "The service is temporarily unavailable" with `Retry-After: 30` within about 5 s, instead of a generic error.
 - **Forgotten passwords:** there's no email reset yet. The warden uses "Reset a student's password" in the warden panel and gives the student the temporary password privately. To change the warden's own password, use "Change password" in the app, or re-run `npm run seed`.
 - **Missing config:** if `MONGO_URI` or `JWT_SECRET` is missing, every `/api` call returns 500 "Server is not configured correctly", and `/api/health` returns 503 with the names of the missing variables. Check `/api/health` first whenever something looks broken after a deploy.
 
@@ -93,17 +100,19 @@ Run the backend tests with `cd backend && npm test`. They use a temporary in-mem
 
 ## API reference
 
-| Method | Path | Who | What |
-|---|---|---|---|
-| POST | `/api/auth/register` | anyone | Student sign-up → `{ token, user }` |
-| POST | `/api/auth/login` | anyone | Email + password → `{ token, user }` |
-| GET | `/api/auth/me` | logged in | Current user |
-| POST | `/api/auth/change-password` | logged in | `{ currentPassword, newPassword }` → new `{ token, user }`; logs out other sessions |
-| POST | `/api/auth/reset-password` | warden | `{ email }` → `{ email, temporaryPassword }`; student must change it at next login |
-| POST | `/api/complaints` | student | Submit complaint |
-| GET | `/api/complaints/mine` | student | Own complaints |
-| GET | `/api/complaints?status=&page=&limit=` | warden | Paged list, urgent first, with `counts` |
-| PATCH | `/api/complaints/:id` | warden | `{ status: "Pending" \| "In Progress" \| "Completed" }` |
-| GET | `/api/health` | anyone | Health check |
+| Method | Path | Who | What | Status codes |
+|---|---|---|---|---|
+| POST | `/api/auth/register` | anyone | Student sign-up → `{ token, user }` | 201; 400 invalid input, weak password, bad reg number or email domain; 409 email or reg number taken; 429 |
+| POST | `/api/auth/login` | anyone | Email + password → `{ token, user }` | 200; 400; 401 wrong email/password; 429 |
+| GET | `/api/auth/me` | logged in | Current user (`mustChangePassword`, `passwordResetAt`) | 200; 401 |
+| POST | `/api/auth/change-password` | logged in | `{ currentPassword, newPassword }` → new `{ token, user }`; logs out other sessions | 200; 400 (incl. wrong current password); 401; 429 |
+| POST | `/api/auth/reset-password` | warden | `{ email }` → `{ email, temporaryPassword }`; student must change it at next login | 200; 400; 401; 403 not a warden; 404 no such student; 429 |
+| POST | `/api/complaints` | student | Submit complaint | 201; 400; 401; 403 role or password change pending; 409 duplicate; 429 |
+| GET | `/api/complaints/mine` | student | Latest 100 of the student's own complaints | 200; 401; 403 |
+| GET | `/api/complaints?status=&page=&limit=` | warden | Paged list, urgent first, with `counts` | 200; 400 bad filter; 401; 403 |
+| PATCH | `/api/complaints/:id` | warden | `{ status: "Pending" \| "In Progress" \| "Completed" }` | 200; 400; 401; 403; 404 |
+| GET | `/api/health` | anyone | DB ping. Lists the names of missing env vars, never their values (a deliberate trade-off for debugging deploys) | 200; 503 |
+
+Any `/api` call can also return 500 (unexpected error, generic message) or 503 + `Retry-After` (database unreachable). Errors are always JSON `{ message }`.
 
 Send the token as `Authorization: Bearer <token>`.

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import vitLogo from '../assets/vit-logo.jpg'
 import { apiRequest } from '../api'
-import { HOSTEL_BLOCKS, LIMITS } from '../constants'
+import { HOSTEL_BLOCKS, LIMITS, REG_NUMBER_PATTERN, MIN_PASSWORD_LENGTH } from '../constants'
 
 const emptyRegister = {
   name: '',
@@ -79,8 +79,12 @@ function LoginPage({ onLogin, notice }) {
       setError('Please enter a valid email address.')
       return
     }
-    if (registerData.password.length < 6) {
-      setError('Password must be at least 6 characters.')
+    if (!REG_NUMBER_PATTERN.test(registerData.regNumber.trim().toUpperCase())) {
+      setError('Please enter a valid registration number (e.g. 23BCE1234).')
+      return
+    }
+    if (registerData.password.length < MIN_PASSWORD_LENGTH) {
+      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`)
       return
     }
     submit('/api/auth/register', registerData)
@@ -165,7 +169,7 @@ function LoginPage({ onLogin, notice }) {
 
             <div className="form-group">
               <label htmlFor="register-password">Password</label>
-              <input id="register-password" type="password" name="password" placeholder="At least 6 characters" autoComplete="new-password" maxLength={LIMITS.password} value={registerData.password} onChange={handleRegisterChange} />
+              <input id="register-password" type="password" name="password" placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`} autoComplete="new-password" maxLength={LIMITS.password} value={registerData.password} onChange={handleRegisterChange} />
             </div>
 
             <div className="form-group">

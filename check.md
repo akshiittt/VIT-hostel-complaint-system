@@ -110,6 +110,29 @@ From the full-repo architecture review. Backend tests 66/66, frontend 35/35. Cli
 - [ ] #24: advisories in the dev-only test tools.
 - [ ] Wardens see every hostel. Scope wardens to hostels/blocks if that's how VIT assigns them.
 
+## Backend audit (2026-10-13, fourth pass)
+
+Backend tests 84/84, frontend 51/51. The audit probe was re-run against the fixed code.
+
+- [x] **H1** Complaint spam: 10 per hour per student, 3 urgent per day, duplicates within 10 minutes → 409. In the probe, 60 identical urgent complaints now produce 1 created.
+- [x] **H2** Login brute force: added a per-account limit (30/hour across IPs). `trust proxy` is only on for Vercel; a rotating X-Forwarded-For is now blocked 30/30 elsewhere. The warden seed password needs 12+ characters.
+- [x] **M1** Warden resets record `passwordResetAt` and `passwordResetBy`, emit an audit log line, and show the student when it happened. *A warden can still take over a student account. That's inherent to resetting without email; the trail makes it visible.*
+- [x] **M2** Registration numbers must match the VIT format (`23BCE1234`), on both client and server.
+- [x] **M3** Database outage → 503 + `Retry-After` in about 5 s, instead of a 500 after 10 s.
+- [x] **M4** Passwords need 8+ characters, and common passwords are rejected.
+- [x] **M5** Structured JSON request and audit logs, with no bodies, tokens or passwords.
+- [x] **L1–L7, L9, L10**:
+  - `__v` hidden.
+  - `Cache-Control: no-store` on auth responses.
+  - `X-Powered-By` removed and `nosniff` added.
+  - Unknown `/api` paths → 404.
+  - Schema enforces hostel and block.
+  - `/mine` capped at 100.
+  - Reset limited to 20 per hour.
+  - Atomic `tokenVersion`.
+  - Status codes documented in DEPLOY.md.
+- [ ] **L8** (kept on purpose): `/api/health` lists missing env var *names*. This is a debugging aid; no values are ever shown.
+
 ## Accepted decisions (not fixing now)
 
 - **JWT in localStorage, 7-day expiry, no server-side revocation.** Acceptable because there are no XSS sinks (React escaping, no `dangerouslySetInnerHTML`). httpOnly cookies would need SameSite/CSRF handling across two Vercel domains. Revisit if an admin role is added in phase 2.

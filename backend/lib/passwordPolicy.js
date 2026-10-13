@@ -1,0 +1,31 @@
+const { LIMITS } = require('./constants')
+
+const MIN_PASSWORD_LENGTH = 8
+
+// The most guessed passwords that pass the length rule, plus obvious
+// campus-specific ones. Compared case-insensitively.
+const COMMON_PASSWORDS = new Set([
+  '12345678', '123456789', '1234567890', '87654321', '11111111', '00000000',
+  'password', 'password1', 'password12', 'password123', 'passw0rd', 'p@ssw0rd',
+  'qwerty12', 'qwerty123', 'qwertyuiop', 'asdfghjk', 'zaq12wsx', 'iloveyou',
+  'abc12345', 'abcd1234', 'admin123', 'welcome1', 'welcome123', 'letmein1',
+  'sunshine', 'princess', 'football', 'baseball', 'superman', 'trustno1',
+  'vitstudent', 'vit12345', 'vitvellore', 'hostel123', 'warden123', 'student1',
+  'student123', 'changeme'
+])
+
+// Returns the 400 message for a new password that breaks the policy, or null.
+function passwordProblem(password) {
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return `Password must be at least ${MIN_PASSWORD_LENGTH} characters`
+  }
+  if (Buffer.byteLength(password, 'utf8') > LIMITS.password) {
+    return `Password is too long (max ${LIMITS.password} characters)`
+  }
+  if (COMMON_PASSWORDS.has(password.toLowerCase())) {
+    return 'This password is too common. Please choose another.'
+  }
+  return null
+}
+
+module.exports = { passwordProblem, MIN_PASSWORD_LENGTH, COMMON_PASSWORDS }

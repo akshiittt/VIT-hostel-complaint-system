@@ -196,7 +196,7 @@ function App() {
     return (
       <div className="login-page">
         <div className="login-card">
-          <ChangePasswordForm forced onChanged={handlePasswordChanged} onSessionExpired={expireSession} />
+          <ChangePasswordForm forced resetAt={user.passwordResetAt} onChanged={handlePasswordChanged} onSessionExpired={expireSession} />
           <p className="auth-switch">
             <button type="button" className="link-btn" onClick={handleLogout}>Log out</button>
           </p>

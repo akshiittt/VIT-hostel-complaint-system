@@ -74,4 +74,24 @@ describe('ChangePasswordForm', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(onCancel).toHaveBeenCalled()
   })
+
+  it('tells a student when the warden reset their password', () => {
+    render(<ChangePasswordForm forced resetAt="2026-10-13T09:30:00.000Z" onChanged={vi.fn()} />)
+    expect(screen.getByText(/Your password was reset by the warden on 13 Oct 2026/)).toBeInTheDocument()
+  })
+
+  it('rejects a new password under 8 characters without a request', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    render(<ChangePasswordForm onChanged={vi.fn()} />)
+
+    await user.type(screen.getByLabelText('Current password'), 'old-password')
+    await user.type(screen.getByLabelText('New password'), 'short12')
+    await user.type(screen.getByLabelText('Confirm new password'), 'short12')
+    await user.click(screen.getByRole('button', { name: 'Update password' }))
+
+    expect(screen.getByRole('alert')).toHaveTextContent('New password must be at least 8 characters.')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
 })

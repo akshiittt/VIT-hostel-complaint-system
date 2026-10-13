@@ -2,13 +2,22 @@ const express = require('express')
 const mongoose = require('mongoose')
 const Complaint = require('../models/Complaint')
 const { protect, allowRoles, requirePasswordChanged } = require('../middleware/auth')
-const { COMPLAINT_TYPES, COMPLAINT_STATUSES, LIMITS, isValidBlock } = require('../lib/constants')
+const { COMPLAINT_TYPES, COMPLAINT_STATUSES, LIMITS, RATE_LIMITS, isValidBlock } = require('../lib/constants')
 const { isBlank, tooLongMessage } = require('../lib/validation')
+const rateLimit = require('../lib/rateLimit')
 
 const router = express.Router()
 
-router.post('/', protect, requirePasswordChanged, allowRoles('student'), async (req, res) => {
-  const { hostelType, block, room, complaintType, description, urgent } = req.body || {}
+const complaintsPerStudent = rateLimit(RATE_LIMITS.complaintsPerStudent)
+const urgentPerStudent = rateLimit(RATE_LIMITS.urgentPerStudent)
+// The same student repeating the same description this soon is a double submit
+const DUPLICATE_WINDOW_MS = 10 * 60 * 1000
+// /mine returns the latest complaints only; older ones stay in the database
+const MINE_LIMIT = 100
+
+// Runs before the rate limits so fixing a typo doesn't use up the allowance
+function validateComplaint(req, res, next) {
+  const { hostelType, block, room, complaintType, description } = req.body || {}
 
   if ([hostelType, block, room, complaintType, description].some(isBlank)) {
     return res.status(400).json({ message: 'Please fill in all required fields' })
@@ -25,6 +34,20 @@ router.post('/', protect, requirePasswordChanged, allowRoles('student'), async (
   ])
   if (tooLong) {
     return res.status(400).json({ message: tooLong })
+  }
+  next()
+}
+
+router.post('/', protect, requirePasswordChanged, allowRoles('student'), validateComplaint, complaintsPerStudent, urgentPerStudent, async (req, res) => {
+  const { hostelType, block, room, complaintType, description, urgent } = req.body
+
+  const duplicate = await Complaint.exists({
+    studentId: req.user._id,
+    description: description.trim(),
+    createdAt: { $gte: new Date(Date.now() - DUPLICATE_WINDOW_MS) }
+  })
+  if (duplicate) {
+    return res.status(409).json({ message: 'You already submitted this complaint a moment ago' })
   }
 
   const complaint = await Complaint.create({
@@ -43,7 +66,7 @@ router.post('/', protect, requirePasswordChanged, allowRoles('student'), async (
 })
 
 router.get('/mine', protect, requirePasswordChanged, allowRoles('student'), async (req, res) => {
-  const complaints = await Complaint.find({ studentId: req.user._id }).sort({ createdAt: -1 })
+  const complaints = await Complaint.find({ studentId: req.user._id }).sort({ createdAt: -1 }).limit(MINE_LIMIT)
   res.json(complaints)
 })
 

@@ -1,9 +1,14 @@
 const RateLimit = require('../models/RateLimit')
 
+const defaultMessage = (minutes) => `Too many attempts. Please try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`
+
 // Fixed-window rate limiter backed by MongoDB, so the count is shared across
 // every serverless instance. Every attempt counts, successful or not.
-function rateLimit({ name, windowMs, max, keyFn }) {
+// skip(req) → true leaves the request uncounted; message(minutes) words the 429.
+function rateLimit({ name, windowMs, max, keyFn, skip, message = defaultMessage }) {
   return async (req, res, next) => {
+    if (skip && skip(req)) return next()
+
     const now = Date.now()
     const windowStart = Math.floor(now / windowMs) * windowMs
     const windowEnd = windowStart + windowMs
@@ -29,9 +34,7 @@ function rateLimit({ name, windowMs, max, keyFn }) {
       const retryAfterSeconds = Math.max(1, Math.ceil((windowEnd - now) / 1000))
       const minutes = Math.max(1, Math.ceil(retryAfterSeconds / 60))
       res.set('Retry-After', String(retryAfterSeconds))
-      return res.status(429).json({
-        message: `Too many attempts. Please try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`
-      })
+      return res.status(429).json({ message: message(minutes) })
     }
 
     next()

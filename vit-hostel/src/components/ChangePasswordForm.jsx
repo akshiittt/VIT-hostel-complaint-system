@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { apiRequest } from '../api'
-import { LIMITS } from '../constants'
+import { LIMITS, MIN_PASSWORD_LENGTH } from '../constants'
 
 const emptyForm = { currentPassword: '', newPassword: '', confirmPassword: '' }
 
-function ChangePasswordForm({ onChanged, onCancel, onSessionExpired, forced = false }) {
+// resetAt: when a warden reset the password (shown on the forced screen)
+function ChangePasswordForm({ onChanged, onCancel, onSessionExpired, forced = false, resetAt }) {
   const [formData, setFormData] = useState(emptyForm)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -22,8 +23,8 @@ function ChangePasswordForm({ onChanged, onCancel, onSessionExpired, forced = fa
       setError('Please fill in all fields.')
       return
     }
-    if (newPassword.length < 6) {
-      setError('New password must be at least 6 characters.')
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      setError(`New password must be at least ${MIN_PASSWORD_LENGTH} characters.`)
       return
     }
     if (newPassword !== confirmPassword) {
@@ -54,7 +55,7 @@ function ChangePasswordForm({ onChanged, onCancel, onSessionExpired, forced = fa
       <h2 className="panel-heading">{forced ? 'Choose a new password' : 'Change password'}</h2>
       <p className="submitting-as">
         {forced
-          ? 'Your password was reset by the warden. Choose a new password to continue.'
+          ? `Your password was reset by the warden${resetAt ? ` on ${new Date(resetAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}` : ''}. Choose a new password to continue.`
           : 'Enter your current password, then choose a new one.'}
       </p>
 
@@ -78,7 +79,7 @@ function ChangePasswordForm({ onChanged, onCancel, onSessionExpired, forced = fa
             id="change-new"
             type="password"
             name="newPassword"
-            placeholder="At least 6 characters"
+            placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
             autoComplete="new-password"
             maxLength={LIMITS.password}
             value={formData.newPassword}

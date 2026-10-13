@@ -3,7 +3,7 @@
 const { LIMITS } = require('./constants')
 
 const DEMO_PASSWORD = 'warden1234'
-const MIN_PASSWORD_LENGTH = 8
+const MIN_PASSWORD_LENGTH = 12
 
 // Only a plain mongodb:// URI pointing at this machine counts as local.
 // mongodb+srv always resolves to a remote cluster.

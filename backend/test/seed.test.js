@@ -55,3 +55,8 @@ test('seed: only mongodb:// on localhost or 127.0.0.1 counts as local', () => {
   assert.equal(isLocalMongoUri('not a uri'), false)
   assert.equal(isLocalMongoUri(undefined), false)
 })
+
+test('seed: the warden password needs at least 12 characters', () => {
+  assert.equal(planSeed({ env: { MONGO_URI: remote, SEED_WARDEN_PASSWORD: 'elevenchars' } }).action, 'abort')
+  assert.equal(planSeed({ env: { MONGO_URI: remote, SEED_WARDEN_PASSWORD: 'twelve-chars' } }).action, 'create')
+})

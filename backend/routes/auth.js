@@ -1,7 +1,9 @@
 const express = require('express')
 const User = require('../models/User')
 const { protect, allowRoles } = require('../middleware/auth')
-const { isValidBlock, LIMITS, RATE_LIMITS } = require('../lib/constants')
+const { isValidBlock, LIMITS, REG_NUMBER_PATTERN, RATE_LIMITS } = require('../lib/constants')
+const { passwordProblem } = require('../lib/passwordPolicy')
+const { log } = require('../lib/logger')
 const { allowedEmailDomains } = require('../lib/config')
 const { isBlank, tooLongMessage } = require('../lib/validation')
 const { generateToken } = require('../lib/token')
@@ -11,9 +13,17 @@ const rateLimit = require('../lib/rateLimit')
 const router = express.Router()
 
 const loginPerIpEmail = rateLimit(RATE_LIMITS.loginPerIpEmail)
+const loginPerEmail = rateLimit(RATE_LIMITS.loginPerEmail)
 const loginPerIp = rateLimit(RATE_LIMITS.loginPerIp)
 const registerPerIp = rateLimit(RATE_LIMITS.registerPerIp)
 const changePasswordPerUser = rateLimit(RATE_LIMITS.changePasswordPerUser)
+const resetPerWarden = rateLimit(RATE_LIMITS.resetPerWarden)
+
+// Bumps tokenVersion with $inc (safe against two concurrent changes) and
+// returns the updated user, whose token carries the new version
+function bumpTokenVersion(userId) {
+  return User.findByIdAndUpdate(userId, { $inc: { tokenVersion: 1 } }, { new: true })
+}
 
 router.post('/register', registerPerIp, async (req, res) => {
   const { name, email, password, regNumber, hostelType, block, room } = req.body || {}
@@ -39,8 +49,13 @@ router.post('/register', registerPerIp, async (req, res) => {
   if (domains.length && !domains.includes(normalizedEmail.slice(normalizedEmail.lastIndexOf('@') + 1))) {
     return res.status(400).json({ message: `Please use your university email (@${domains.join(' or @')})` })
   }
-  if (password.length < 6) {
-    return res.status(400).json({ message: 'Password must be at least 6 characters' })
+  const normalizedReg = regNumber.trim().toUpperCase()
+  if (!REG_NUMBER_PATTERN.test(normalizedReg)) {
+    return res.status(400).json({ message: 'Please enter a valid registration number (e.g. 23BCE1234)' })
+  }
+  const weakPassword = passwordProblem(password)
+  if (weakPassword) {
+    return res.status(400).json({ message: weakPassword })
   }
   if (!isValidBlock(hostelType, block)) {
     return res.status(400).json({ message: 'Please choose a valid hostel and block' })
@@ -53,7 +68,7 @@ router.post('/register', registerPerIp, async (req, res) => {
     return res.status(409).json({ message: 'An account with this email already exists' })
   }
   // Same normalisation as the schema (trim + uppercase)
-  const regTaken = await User.exists({ role: 'student', regNumber: regNumber.trim().toUpperCase() })
+  const regTaken = await User.exists({ role: 'student', regNumber: normalizedReg })
   if (regTaken) {
     return res.status(409).json({ message: 'This registration number is already registered' })
   }
@@ -64,7 +79,7 @@ router.post('/register', registerPerIp, async (req, res) => {
   res.status(201).json({ token: generateToken(user), user: user.toPublic() })
 })
 
-router.post('/login', loginPerIpEmail, loginPerIp, async (req, res) => {
+router.post('/login', loginPerIpEmail, loginPerEmail, loginPerIp, async (req, res) => {
   const { email, password } = req.body || {}
 
   if (isBlank(email) || isBlank(password)) {
@@ -80,9 +95,12 @@ router.post('/login', loginPerIpEmail, loginPerIp, async (req, res) => {
 
   const user = await User.findOne({ email: email.trim().toLowerCase() }).select('+password')
   if (!user || !(await user.matchPassword(password))) {
+    // Who was targeted (if the account exists) and from where; never the email or password
+    log('login_failed', { userId: user ? String(user._id) : undefined, ip: req.ip })
     return res.status(401).json({ message: 'Invalid email or password' })
   }
 
+  log('login', { userId: String(user._id), role: user.role })
   res.json({ token: generateToken(user), user: user.toPublic() })
 })
 
@@ -98,12 +116,9 @@ router.post('/change-password', protect, changePasswordPerUser, async (req, res)
   if (isBlank(currentPassword) || isBlank(newPassword)) {
     return res.status(400).json({ message: 'Please fill in all required fields' })
   }
-  if (newPassword.length < 6) {
-    return res.status(400).json({ message: 'Password must be at least 6 characters' })
-  }
-  const tooLong = tooLongMessage([['Password', newPassword, LIMITS.password, { bytes: true }]])
-  if (tooLong) {
-    return res.status(400).json({ message: tooLong })
+  const weakPassword = passwordProblem(newPassword)
+  if (weakPassword) {
+    return res.status(400).json({ message: weakPassword })
   }
   if (newPassword === currentPassword) {
     return res.status(400).json({ message: 'New password must be different from the current one' })
@@ -118,15 +133,16 @@ router.post('/change-password', protect, changePasswordPerUser, async (req, res)
   // Bumping tokenVersion logs out every other session.
   user.password = newPassword
   user.mustChangePassword = false
-  user.tokenVersion += 1
   await user.save({ validateModifiedOnly: true })
+  const updated = await bumpTokenVersion(user._id)
 
-  res.json({ token: generateToken(user), user: user.toPublic() })
+  log('password_changed', { userId: String(user._id) })
+  res.json({ token: generateToken(updated), user: updated.toPublic() })
 })
 
 // A warden gives a student who forgot their password a temporary one. The
 // student must change it after logging in. Wardens can't reset other wardens.
-router.post('/reset-password', protect, allowRoles('warden'), async (req, res) => {
+router.post('/reset-password', protect, allowRoles('warden'), resetPerWarden, async (req, res) => {
   const { email } = req.body || {}
 
   if (isBlank(email)) {
@@ -142,9 +158,12 @@ router.post('/reset-password', protect, allowRoles('warden'), async (req, res) =
   const temporaryPassword = generateTemporaryPassword()
   user.password = temporaryPassword
   user.mustChangePassword = true
-  user.tokenVersion += 1
+  user.passwordResetAt = new Date()
+  user.passwordResetBy = req.user._id
   await user.save({ validateModifiedOnly: true })
+  await bumpTokenVersion(user._id)
 
+  log('password_reset', { studentId: String(user._id), wardenId: String(req.user._id) })
   res.json({ email: user.email, temporaryPassword })
 })
 

@@ -1,5 +1,5 @@
 const mongoose = require('mongoose')
-const { COMPLAINT_TYPES, COMPLAINT_STATUSES, LIMITS } = require('../lib/constants')
+const { HOSTEL_BLOCKS, COMPLAINT_TYPES, COMPLAINT_STATUSES, LIMITS, isValidBlock } = require('../lib/constants')
 
 const complaintSchema = new mongoose.Schema({
   studentId: {
@@ -19,11 +19,19 @@ const complaintSchema = new mongoose.Schema({
   },
   hostelType: {
     type: String,
+    enum: Object.keys(HOSTEL_BLOCKS),
     required: true
   },
+  // Must be one of the chosen hostel's blocks (routes check this too)
   block: {
     type: String,
-    required: true
+    required: true,
+    validate: {
+      validator(value) {
+        return isValidBlock(this.hostelType, value)
+      },
+      message: (props) => `Invalid block "${props.value}" for this hostel`
+    }
   },
   room: {
     type: String,
@@ -55,7 +63,7 @@ const complaintSchema = new mongoose.Schema({
     type: Date,
     default: null
   }
-}, { timestamps: true })
+}, { timestamps: true, toJSON: { versionKey: false } })
 
 // Match the two list queries: a student's own complaints (newest first) and
 // the warden view (urgent first, then newest)

@@ -13,4 +13,6 @@ test('frontend constants match the backend', async () => {
   assert.deepEqual(frontend.COMPLAINT_TYPES, backend.COMPLAINT_TYPES)
   assert.deepEqual(frontend.COMPLAINT_STATUSES, backend.COMPLAINT_STATUSES)
   assert.deepEqual(frontend.LIMITS, backend.LIMITS)
+  assert.equal(frontend.REG_NUMBER_PATTERN.source, backend.REG_NUMBER_PATTERN.source)
+  assert.equal(frontend.MIN_PASSWORD_LENGTH, require('../lib/passwordPolicy').MIN_PASSWORD_LENGTH)
 })

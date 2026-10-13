@@ -60,6 +60,16 @@ const userSchema = new mongoose.Schema({
   mustChangePassword: {
     type: Boolean,
     default: false
+  },
+  // Audit trail for warden resets: when, and by which warden
+  passwordResetAt: {
+    type: Date,
+    default: null
+  },
+  passwordResetBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
   }
 }, { timestamps: true })
 
@@ -89,7 +99,8 @@ userSchema.methods.toPublic = function () {
     hostelType: this.hostelType,
     block: this.block,
     room: this.room,
-    mustChangePassword: this.mustChangePassword
+    mustChangePassword: this.mustChangePassword,
+    passwordResetAt: this.passwordResetAt
   }
 }
 

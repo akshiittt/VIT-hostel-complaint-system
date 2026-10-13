@@ -13,6 +13,8 @@ before(async () => {
   mongod = await MongoMemoryServer.create()
   process.env.MONGO_URI = mongod.getUri()
   process.env.JWT_SECRET = 'test-secret'
+  process.env.LOG_LEVEL = 'silent'
+  delete process.env.VERCEL
   app = require('../app')
   User = require('../models/User')
   RateLimit = require('../models/RateLimit')
@@ -525,7 +527,7 @@ test('change-password validates input', async () => {
     [{}, 'Please fill in all required fields'],
     [{ currentPassword: 'secret123', newPassword: '   ' }, 'Please fill in all required fields'],
     [{ currentPassword: { $ne: '' }, newPassword: 'newpass123' }, 'Please fill in all required fields'],
-    [{ currentPassword: 'secret123', newPassword: '12345' }, 'Password must be at least 6 characters'],
+    [{ currentPassword: 'secret123', newPassword: '1234567' }, 'Password must be at least 8 characters'],
     [{ currentPassword: 'secret123', newPassword: 'é'.repeat(37) }, 'Password is too long (max 72 characters)'],
     [{ currentPassword: 'secret123', newPassword: 'secret123' }, 'New password must be different from the current one'],
     [{ currentPassword: 'wrong-one', newPassword: 'newpass123' }, 'Current password is incorrect']
@@ -838,4 +840,14 @@ test('a student with a temporary password must change it before using complaints
   const ok = await request(app).post('/api/complaints')
     .set('Authorization', `Bearer ${changed.body.token}`).send(complaint)
   assert.equal(ok.status, 201)
+})
+
+test('without VERCEL, X-Forwarded-For is ignored so it cannot dodge the login limit', async () => {
+  const wrong = { email: 'student@example.com', password: 'wrong-password' }
+  let blocked = 0
+  for (let i = 0; i < 15; i++) {
+    const res = await request(app).post('/api/auth/login').set('X-Forwarded-For', `10.0.${i}.1`).send(wrong)
+    if (res.status === 429) blocked++
+  }
+  assert.equal(blocked, 5)
 })

@@ -17,7 +17,7 @@ async function connectDB() {
 
   if (!cached.promise) {
     cached.promise = mongoose
-      .connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 10000 })
+      .connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000 })
       .catch((error) => {
         // Allow the next request to retry instead of reusing a failed promise
         cached.promise = null
