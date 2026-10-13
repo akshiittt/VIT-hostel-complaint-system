@@ -11,6 +11,7 @@ function ChangePasswordForm({ onChanged, onCancel, onSessionExpired, forced = fa
 
   function handleChange(e) {
     setFormData({ ...formData, [e.target.name]: e.target.value })
+    setError('')
   }
 
   async function handleSubmit(e) {
@@ -57,7 +58,7 @@ function ChangePasswordForm({ onChanged, onCancel, onSessionExpired, forced = fa
           : 'Enter your current password, then choose a new one.'}
       </p>
 
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} noValidate>
         <div className="form-group">
           <label htmlFor="change-current">Current password</label>
           <input

@@ -125,3 +125,37 @@ describe('LoginPage: register', () => {
     expect(screen.getByRole('button', { name: 'Login' })).toBeInTheDocument()
   })
 })
+
+describe('LoginPage: validation messages', () => {
+  it('shows one app message for a malformed email and makes no request', async () => {
+    const fetchMock = stubFetch(async () => jsonResponse(200, {}))
+    const user = userEvent.setup()
+    const { container } = render(<LoginPage onLogin={vi.fn()} />)
+
+    expect(container.querySelector('form')).toHaveAttribute('novalidate')
+    await user.type(screen.getByLabelText('Email'), 'not-an-email')
+    await user.type(screen.getByLabelText('Password'), 'secret123')
+    await user.click(screen.getByRole('button', { name: 'Login' }))
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Please enter a valid email address.')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('clears the error as soon as the user edits a field', async () => {
+    stubFetch(async () => jsonResponse(200, {}))
+    const user = userEvent.setup()
+    render(<LoginPage onLogin={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: 'Login' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('Please enter your email and password.')
+
+    await user.type(screen.getByLabelText('Email'), 'a')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('shows a notice passed in by the app', () => {
+    stubFetch(async () => jsonResponse(200, {}))
+    render(<LoginPage onLogin={vi.fn()} notice="Your session expired. Please log in again." />)
+    expect(screen.getByRole('status')).toHaveTextContent('Your session expired. Please log in again.')
+  })
+})

@@ -9,6 +9,13 @@ import './App.css'
 const WARDEN_PAGE_SIZE = 20
 const initialWardenQuery = { status: 'all', page: 1 }
 const initialWardenMeta = { page: 1, pages: 1, total: 0, counts: { total: 0, open: 0, completed: 0 } }
+const SESSION_EXPIRED_NOTICE = 'Your session expired. Please log in again.'
+
+// The app has a single screen per role and no routes; put a stray deep link
+// (e.g. a bookmarked /admin) back to / so the address bar matches the page
+if (typeof window !== 'undefined' && (window.location.pathname !== '/' || window.location.hash)) {
+  window.history.replaceState(null, '', '/')
+}
 
 function App() {
   const [user, setUser] = useState(null)
@@ -20,6 +27,8 @@ function App() {
   const [wardenQuery, setWardenQuery] = useState(initialWardenQuery)
   const [wardenMeta, setWardenMeta] = useState(initialWardenMeta)
   const [actionError, setActionError] = useState('')
+  const [updatingIds, setUpdatingIds] = useState([])
+  const [loginNotice, setLoginNotice] = useState('')
   const requestIdRef = useRef(0)
 
   // Restore the logged-in user from a saved token. Only a 401 logs out;
@@ -34,8 +43,12 @@ function App() {
     apiRequest('/api/auth/me')
       .then(setUser)
       .catch((error) => {
-        if (error.status === 401) clearToken()
-        else setSessionError(error.message)
+        if (error.status === 401) {
+          clearToken()
+          setLoginNotice(SESSION_EXPIRED_NOTICE)
+        } else {
+          setSessionError(error.message)
+        }
       })
       .finally(() => setCheckingSession(false))
   }, [])
@@ -55,16 +68,30 @@ function App() {
     setWardenQuery(initialWardenQuery)
     setWardenMeta(initialWardenMeta)
     setActionError('')
+    setUpdatingIds([])
+    setLoginNotice('')
   }, [])
+
+  // A 401 means the token was revoked or expired: log out and say why
+  const expireSession = useCallback(() => {
+    handleLogout()
+    setLoginNotice(SESSION_EXPIRED_NOTICE)
+  }, [handleLogout])
+
+  // Depend on the fields that change what we fetch, not the whole user
+  // object, so e.g. a password change (new user object) doesn't refetch
+  const userId = user?._id
+  const role = user?.role
+  const mustChangePassword = Boolean(user?.mustChangePassword)
 
   // Students get a plain array; wardens get one page plus counts for the current filter.
   const loadComplaints = useCallback(async () => {
-    if (!user || user.mustChangePassword) return
+    if (!userId || mustChangePassword) return
     const id = ++requestIdRef.current
     setLoadingComplaints(true)
     setLoadError('')
     try {
-      if (user.role === 'warden') {
+      if (role === 'warden') {
         const { status, page } = wardenQuery
         const data = await apiRequest(
           `/api/complaints?status=${encodeURIComponent(status)}&page=${page}&limit=${WARDEN_PAGE_SIZE}`
@@ -83,12 +110,12 @@ function App() {
       }
     } catch (error) {
       if (id !== requestIdRef.current) return
-      if (error.status === 401) return handleLogout()
+      if (error.status === 401) return expireSession()
       setLoadError(error.message)
     } finally {
       if (id === requestIdRef.current) setLoadingComplaints(false)
     }
-  }, [user, wardenQuery, handleLogout])
+  }, [userId, role, mustChangePassword, wardenQuery, expireSession])
 
   useEffect(() => {
     loadComplaints()
@@ -96,6 +123,7 @@ function App() {
 
   function handleLogin({ token, user }) {
     setToken(token)
+    setLoginNotice('')
     setUser(user)
   }
 
@@ -118,7 +146,7 @@ function App() {
       saved = await apiRequest('/api/complaints', { method: 'POST', body: newComplaint })
     } catch (error) {
       if (error.status === 401) {
-        handleLogout()
+        expireSession()
         return false
       }
       throw error
@@ -129,12 +157,16 @@ function App() {
 
   // Reloads the current page afterwards: counts and filter membership change
   async function updateComplaintStatus(id, newStatus) {
+    if (updatingIds.includes(id)) return
+    setUpdatingIds((ids) => [...ids, id])
     try {
       await apiRequest(`/api/complaints/${id}`, { method: 'PATCH', body: { status: newStatus } })
     } catch (error) {
-      if (error.status === 401) return handleLogout()
+      if (error.status === 401) return expireSession()
       setActionError(error.message)
       return
+    } finally {
+      setUpdatingIds((ids) => ids.filter((x) => x !== id))
     }
     setActionError('')
     await loadComplaints()
@@ -157,14 +189,14 @@ function App() {
   }
 
   if (!user) {
-    return <LoginPage onLogin={handleLogin} />
+    return <LoginPage onLogin={handleLogin} notice={loginNotice} />
   }
 
   if (user.mustChangePassword) {
     return (
       <div className="login-page">
         <div className="login-card">
-          <ChangePasswordForm forced onChanged={handlePasswordChanged} onSessionExpired={handleLogout} />
+          <ChangePasswordForm forced onChanged={handlePasswordChanged} onSessionExpired={expireSession} />
           <p className="auth-switch">
             <button type="button" className="link-btn" onClick={handleLogout}>Log out</button>
           </p>
@@ -180,12 +212,14 @@ function App() {
         loading={loadingComplaints}
         loadError={loadError}
         actionError={actionError}
+        updatingIds={updatingIds}
         query={wardenQuery}
         meta={wardenMeta}
         onQueryChange={changeWardenQuery}
         onRefresh={loadComplaints}
         updateComplaintStatus={updateComplaintStatus}
         onLogout={handleLogout}
+        onSessionExpired={expireSession}
         onPasswordChanged={handlePasswordChanged}
       />
     )
@@ -200,6 +234,7 @@ function App() {
       addComplaint={addComplaint}
       onRefresh={loadComplaints}
       onLogout={handleLogout}
+      onSessionExpired={expireSession}
       onPasswordChanged={handlePasswordChanged}
     />
   )

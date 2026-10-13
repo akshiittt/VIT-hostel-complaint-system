@@ -15,12 +15,12 @@ function ComplaintList({ complaints, loading, loadError, onRefresh }) {
   return (
     <div className="panel-card">
       <div className="complaints-header">
-        <h2 className="panel-heading">
-          My Complaints
+        <div className="heading-row">
+          <h2 className="panel-heading">My Complaints</h2>
           <button type="button" className="refresh-btn" onClick={onRefresh} disabled={loading}>
             {loading ? 'Refreshing…' : 'Refresh'}
           </button>
-        </h2>
+        </div>
         <div className="filter-group">
           <label htmlFor="complaint-filter">Filter by:</label>
           <select id="complaint-filter" value={filter} onChange={(e) => setFilter(e.target.value)}>

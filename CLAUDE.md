@@ -81,6 +81,11 @@ All errors are JSON `{ message }`.
 - The role comes from the server (`user.role`), never from what the user clicked.
 - Session restore only clears the token on 401. On a network or server error it shows a Retry screen. `loadComplaints` uses a request-id ref so stale responses (after logout/login) are ignored. On 401, `addComplaint` logs out and resolves `false`.
 - Accessibility: every field has `id` + `htmlFor` (`login-*`, `register-*`, `complaint-*`), radio groups use `<fieldset><legend>`, errors have `role="alert"` and success messages `role="status"`. Keep this for new fields; the frontend tests query by label.
+- Any 401 goes through `expireSession()` in `App.jsx`, which logs out and shows "Your session expired" on the login page. A plain `handleLogout` is only for the Logout button. `apiRequest` aborts after `REQUEST_TIMEOUT_MS` (15 s) with a friendly message.
+- Both dashboards use `components/TopBar.jsx` (short title and 44 px tap targets on phones; the warden's has a skip link to `#reset-password`). Page content goes in `<main>`. Keep buttons out of `<h2>`s (use `.heading-row`).
+- Forms use `noValidate` and app-side checks, and errors clear when a field changes. Status buttons are disabled while their PATCH is in flight (`updatingIds`).
+- Colours: every text/background pair meets WCAG AA (4.5:1). Primary `#2563b0`, success `#1e7e45`, warning `#a35400`/`#8a4b00`, danger `#b42318`, muted text `#5f6b78`. Don't reintroduce lighter shades.
+- `vit-hostel/vercel.json` rewrites every path to `index.html`, and `App.jsx` resets stray paths and hashes to `/`.
 - Styling is plain CSS in `src/App.css`. Reuse existing classes (`panel-card`, `form-group`, `btn`, `error-msg`, `empty-msg`, `badge-*`) before adding new ones.
 
 ## Environment variables

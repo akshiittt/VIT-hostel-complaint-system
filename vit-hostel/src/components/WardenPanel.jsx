@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import ComplaintCard from './ComplaintCard'
 import ChangePasswordForm from './ChangePasswordForm'
 import ResetPasswordPanel from './ResetPasswordPanel'
-import vitLogo from '../assets/vit-logo.jpg'
+import TopBar from './TopBar'
+
+const NOTICE_MS = 4000
 
 const STATUS_FILTERS = [
   { value: 'all', label: 'All' },
@@ -17,17 +19,25 @@ function WardenPanel({
   loading,
   loadError,
   actionError,
+  updatingIds,
   query,
   meta,
   onQueryChange,
   onRefresh,
   updateComplaintStatus,
   onLogout,
+  onSessionExpired,
   onPasswordChanged
 }) {
   const [showPasswordForm, setShowPasswordForm] = useState(false)
   const [passwordChanged, setPasswordChanged] = useState(false)
   const { counts } = meta
+
+  useEffect(() => {
+    if (!passwordChanged) return
+    const timer = setTimeout(() => setPasswordChanged(false), NOTICE_MS)
+    return () => clearTimeout(timer)
+  }, [passwordChanged])
 
   function togglePasswordForm() {
     setShowPasswordForm(!showPasswordForm)
@@ -46,39 +56,34 @@ function WardenPanel({
 
   return (
     <div className="dashboard-body">
-      <header className="topbar">
-        <div className="topbar-left">
-          <img src={vitLogo} alt="VIT Logo" style={{ width: '36px', height: '36px', objectFit: 'contain' }} />
-          <span className="topbar-title">VIT Hostel Complaint System</span>
-        </div>
-        <div className="topbar-right">
-          <span className="role-badge warden-badge">Warden</span>
-          <button type="button" className="logout-btn" aria-expanded={showPasswordForm} onClick={togglePasswordForm}>
-            Change password
-          </button>
-          <button className="logout-btn" onClick={onLogout}>Logout</button>
-        </div>
-      </header>
+      <TopBar
+        role="warden"
+        showPasswordForm={showPasswordForm}
+        onTogglePassword={togglePasswordForm}
+        onLogout={onLogout}
+        skipTo="reset-password"
+        skipLabel="Skip to reset a student's password"
+      />
 
-      <div className="warden-container">
+      <main className="warden-container">
         {passwordChanged && <p className="success-msg" role="status">Password changed.</p>}
         {showPasswordForm && (
           <div className="panel-card account-card warden-section">
             <ChangePasswordForm
               onChanged={handlePasswordChanged}
               onCancel={() => setShowPasswordForm(false)}
-              onSessionExpired={onLogout}
+              onSessionExpired={onSessionExpired}
             />
           </div>
         )}
 
         <div className="warden-top">
-          <h2 className="panel-heading">
-            All Complaints
-            <button className="refresh-btn" onClick={onRefresh} disabled={loading}>
+          <div className="heading-row">
+            <h2 className="panel-heading">All Complaints</h2>
+            <button type="button" className="refresh-btn" onClick={onRefresh} disabled={loading}>
               {loading ? 'Refreshing…' : 'Refresh'}
             </button>
-          </h2>
+          </div>
           <div className="stats-row">
             <div className="stat-box">
               <span>{counts.total}</span>
@@ -121,6 +126,7 @@ function WardenPanel({
               key={complaint._id}
               complaint={complaint}
               showActions={true}
+              updating={updatingIds.includes(complaint._id)}
               updateComplaintStatus={updateComplaintStatus}
             />
           ))
@@ -148,8 +154,8 @@ function WardenPanel({
           </nav>
         )}
 
-        <ResetPasswordPanel onSessionExpired={onLogout} />
-      </div>
+        <ResetPasswordPanel id="reset-password" onSessionExpired={onSessionExpired} />
+      </main>
     </div>
   )
 }

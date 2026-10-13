@@ -1,9 +1,21 @@
+import { COMPLAINT_STATUSES } from '../constants'
+
 const STATUS_BADGES = {
   Completed: 'badge-status-completed',
   'In Progress': 'badge-status-progress'
 }
 
-function ComplaintCard({ complaint, showActions, updateComplaintStatus }) {
+// Button order and wording for each status the warden can set
+const ACTIONS = {
+  Completed: { label: 'Mark as Completed', className: 'btn-complete' },
+  'In Progress': { label: 'Mark In Progress', className: 'btn-progress' },
+  Pending: { label: 'Mark as Pending', className: 'btn-pending' }
+}
+const ACTION_ORDER = ['Completed', 'In Progress', 'Pending'].filter((s) => COMPLAINT_STATUSES.includes(s))
+
+// updating: true while this card's status change is in flight, so a
+// double-click can't send duplicate requests
+function ComplaintCard({ complaint, showActions, updateComplaintStatus, updating = false }) {
   const statusClass = STATUS_BADGES[complaint.status] || 'badge-status-pending'
 
   const submittedOn = complaint.createdAt
@@ -34,28 +46,18 @@ function ComplaintCard({ complaint, showActions, updateComplaintStatus }) {
       <div className="card-desc">{complaint.description}</div>
 
       {showActions && (
-        <div className="card-actions">
-          <button
-            className="btn-complete"
-            disabled={complaint.status === 'Completed'}
-            onClick={() => updateComplaintStatus(complaint._id, 'Completed')}
-          >
-            Mark as Completed
-          </button>
-          <button
-            className="btn-progress"
-            disabled={complaint.status === 'In Progress'}
-            onClick={() => updateComplaintStatus(complaint._id, 'In Progress')}
-          >
-            Mark In Progress
-          </button>
-          <button
-            className="btn-pending"
-            disabled={complaint.status === 'Pending'}
-            onClick={() => updateComplaintStatus(complaint._id, 'Pending')}
-          >
-            Mark as Pending
-          </button>
+        <div className="card-actions" aria-busy={updating}>
+          {ACTION_ORDER.map((status) => (
+            <button
+              key={status}
+              type="button"
+              className={ACTIONS[status].className}
+              disabled={updating || complaint.status === status}
+              onClick={() => updateComplaintStatus(complaint._id, status)}
+            >
+              {ACTIONS[status].label}
+            </button>
+          ))}
         </div>
       )}
     </div>

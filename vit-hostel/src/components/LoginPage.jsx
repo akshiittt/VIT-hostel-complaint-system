@@ -13,7 +13,12 @@ const emptyRegister = {
   room: ''
 }
 
-function LoginPage({ onLogin }) {
+// Same shape the backend accepts; checked here so the user gets one clear
+// message instead of the browser's built-in bubble
+const EMAIL_PATTERN = /^\S+@\S+\.\S+$/
+
+// notice: optional message shown above the form, e.g. after a session expired
+function LoginPage({ onLogin, notice }) {
   const [mode, setMode] = useState('login')
   const [loginData, setLoginData] = useState({ email: '', password: '' })
   const [registerData, setRegisterData] = useState(emptyRegister)
@@ -22,6 +27,7 @@ function LoginPage({ onLogin }) {
 
   function handleLoginChange(e) {
     setLoginData({ ...loginData, [e.target.name]: e.target.value })
+    setError('')
   }
 
   function handleRegisterChange(e) {
@@ -31,6 +37,7 @@ function LoginPage({ onLogin }) {
       [name]: value,
       ...(name === 'hostelType' ? { block: '' } : {})
     })
+    setError('')
   }
 
   function switchMode(next) {
@@ -55,6 +62,10 @@ function LoginPage({ onLogin }) {
       setError('Please enter your email and password.')
       return
     }
+    if (!EMAIL_PATTERN.test(loginData.email.trim())) {
+      setError('Please enter a valid email address.')
+      return
+    }
     submit('/api/auth/login', loginData)
   }
 
@@ -62,6 +73,10 @@ function LoginPage({ onLogin }) {
     e.preventDefault()
     if (Object.values(registerData).some((v) => v.trim() === '')) {
       setError('Please fill in all fields.')
+      return
+    }
+    if (!EMAIL_PATTERN.test(registerData.email.trim())) {
+      setError('Please enter a valid email address.')
       return
     }
     if (registerData.password.length < 6) {
@@ -84,8 +99,10 @@ function LoginPage({ onLogin }) {
           <p className="login-subtitle">Complaint & Request System</p>
         </div>
 
+        {notice && <p className="notice-msg" role="status">{notice}</p>}
+
         {mode === 'login' ? (
-          <form onSubmit={handleLogin}>
+          <form onSubmit={handleLogin} noValidate>
             <div className="form-group">
               <label htmlFor="login-email">Email</label>
               <input
@@ -130,7 +147,7 @@ function LoginPage({ onLogin }) {
             </p>
           </form>
         ) : (
-          <form onSubmit={handleRegister}>
+          <form onSubmit={handleRegister} noValidate>
             <div className="form-group">
               <label htmlFor="register-name">Full Name</label>
               <input id="register-name" type="text" name="name" placeholder="Your full name" maxLength={LIMITS.name} value={registerData.name} onChange={handleRegisterChange} />

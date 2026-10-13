@@ -327,3 +327,116 @@ describe('App warden flow', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })
+
+describe('App audit fixes', () => {
+  const wardenUser = { _id: 'w1', name: 'Warden', email: 'warden@vit.ac.in', role: 'warden', mustChangePassword: false }
+  const complaint = {
+    _id: 'c1', name: 'Asha Rao', reg: '23BCE1234', hostelType: "Men's Hostel", block: 'C', room: '204',
+    complaintType: 'Water Issue', description: 'Tap is leaking', urgent: false, status: 'Pending',
+    createdAt: '2026-10-01T10:00:00.000Z'
+  }
+  const onePage = [200, { complaints: [complaint], page: 1, limit: 20, total: 1, pages: 1, counts: { total: 1, open: 1, completed: 0 } }]
+
+  it('says the session expired when a saved token is rejected on load', async () => {
+    localStorage.setItem(TOKEN_KEY, 'revoked-token')
+    vi.stubGlobal('fetch', vi.fn(routeFetch({ 'GET /api/auth/me': [401, { message: 'Session expired, please log in again' }] })))
+    render(<App />)
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Your session expired. Please log in again.')
+    expect(screen.getByRole('button', { name: 'Login' })).toBeInTheDocument()
+  })
+
+  it('says the session expired when a request fails with 401 mid-session', async () => {
+    localStorage.setItem(TOKEN_KEY, 'good-token')
+    let listCalls = 0
+    vi.stubGlobal('fetch', vi.fn(routeFetch({
+      'GET /api/auth/me': [200, studentUser],
+      'GET /api/complaints/mine': () => (++listCalls === 1 ? [200, []] : [401, { message: 'Session expired' }])
+    })))
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(await screen.findByRole('button', { name: 'Refresh' }))
+
+    expect(await screen.findByText('Your session expired. Please log in again.')).toBeInTheDocument()
+    expect(localStorage.getItem(TOKEN_KEY)).toBeNull()
+  })
+
+  it('clears the expired-session notice after logging in again', async () => {
+    localStorage.setItem(TOKEN_KEY, 'revoked-token')
+    vi.stubGlobal('fetch', vi.fn(routeFetch({
+      'GET /api/auth/me': [401, { message: 'Session expired' }],
+      'POST /api/auth/login': [200, { token: 'fresh', user: studentUser }],
+      'GET /api/complaints/mine': [200, []]
+    })))
+    const user = userEvent.setup()
+    render(<App />)
+
+    await screen.findByText('Your session expired. Please log in again.')
+    await user.type(screen.getByLabelText('Email'), 'asha@vitstudent.ac.in')
+    await user.type(screen.getByLabelText('Password'), 'secret123')
+    await user.click(screen.getByRole('button', { name: 'Login' }))
+    await user.click(await screen.findByRole('button', { name: 'Logout' }))
+
+    expect(screen.queryByText('Your session expired. Please log in again.')).not.toBeInTheDocument()
+  })
+
+  it('gives the warden a main landmark, a clean heading and a skip link to the reset panel', async () => {
+    localStorage.setItem(TOKEN_KEY, 'warden-token')
+    vi.stubGlobal('fetch', vi.fn(routeFetch({ 'GET /api/auth/me': [200, wardenUser], 'GET /api/complaints': onePage })))
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { name: 'All Complaints' })).toBeInTheDocument()
+    expect(screen.getByRole('main')).toBeInTheDocument()
+    const skip = screen.getByRole('link', { name: "Skip to reset a student's password" })
+    expect(skip).toHaveAttribute('href', '#reset-password')
+    expect(document.getElementById('reset-password')).toHaveTextContent("Reset a student's password")
+  })
+
+  it('disables a card while its status change is in flight, so a double-click sends one request', async () => {
+    localStorage.setItem(TOKEN_KEY, 'warden-token')
+    let finishPatch
+    const fetchMock = vi.fn(async (url, options = {}) => {
+      const key = `${options.method || 'GET'} ${new URL(url).pathname}`
+      if (key === 'PATCH /api/complaints/c1') {
+        await new Promise((resolve) => { finishPatch = resolve })
+        return jsonResponse(200, { ...complaint, status: 'Completed' })
+      }
+      return routeFetch({ 'GET /api/auth/me': [200, wardenUser], 'GET /api/complaints': onePage })(url, options)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(await screen.findByRole('button', { name: 'Mark as Completed' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mark In Progress' })).toBeDisabled())
+    await user.click(screen.getByRole('button', { name: 'Mark In Progress' }))
+
+    const patches = fetchMock.mock.calls.filter(([, options = {}]) => options.method === 'PATCH')
+    expect(patches).toHaveLength(1)
+    finishPatch()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mark In Progress' })).toBeEnabled())
+  })
+
+  it('does not reload complaints after a normal password change', async () => {
+    localStorage.setItem(TOKEN_KEY, 'good-token')
+    const fetchMock = vi.fn(routeFetch({
+      'GET /api/auth/me': [200, studentUser],
+      'GET /api/complaints/mine': [200, []],
+      'POST /api/auth/change-password': [200, { token: 'new-token', user: { ...studentUser, mustChangePassword: false } }]
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(await screen.findByRole('button', { name: 'Change password' }))
+    await user.type(screen.getByLabelText('Current password'), 'old-password')
+    await user.type(screen.getByLabelText('New password'), 'new-password')
+    await user.type(screen.getByLabelText('Confirm new password'), 'new-password')
+    await user.click(screen.getByRole('button', { name: 'Update password' }))
+
+    expect(await screen.findByText('Password changed.')).toBeInTheDocument()
+    expect(callsTo(fetchMock, '/api/complaints/mine')).toHaveLength(1)
+    expect(localStorage.getItem(TOKEN_KEY)).toBe('new-token')
+  })
+})

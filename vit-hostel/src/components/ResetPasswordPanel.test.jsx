@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import ResetPasswordPanel from './ResetPasswordPanel'
+import ResetPasswordPanel, { TEMP_PASSWORD_VISIBLE_MS } from './ResetPasswordPanel'
 
 function jsonResponse(status, body) {
   return { ok: status >= 200 && status < 300, status, json: async () => body }
@@ -24,7 +24,7 @@ describe('ResetPasswordPanel', () => {
 
     const status = await screen.findByRole('status')
     expect(status).toHaveTextContent('Temporary password for asha@vitstudent.ac.in: Tmp-9xQ2')
-    expect(status).toHaveTextContent("It won't be shown again.")
+    expect(status).toHaveTextContent("It won't be shown again")
     expect(screen.getByText('Tmp-9xQ2').tagName).toBe('CODE')
 
     const [url, options] = fetchMock.mock.calls[0]
@@ -46,5 +46,36 @@ describe('ResetPasswordPanel', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No student account with that email')
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('hides the temporary password on request', async () => {
+    stubFetch(async () => jsonResponse(200, { email: 'asha@vitstudent.ac.in', temporaryPassword: 'Tmp-9xQ2' }))
+    const user = userEvent.setup()
+    render(<ResetPasswordPanel />)
+
+    await user.type(screen.getByLabelText('Student email'), 'asha@vitstudent.ac.in')
+    await user.click(screen.getByRole('button', { name: 'Reset password' }))
+    await screen.findByText('Tmp-9xQ2')
+
+    await user.click(screen.getByRole('button', { name: 'Hide password' }))
+    expect(screen.queryByText('Tmp-9xQ2')).not.toBeInTheDocument()
+  })
+
+  it('clears the temporary password from the screen after a minute', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      stubFetch(async () => jsonResponse(200, { email: 'asha@vitstudent.ac.in', temporaryPassword: 'Tmp-9xQ2' }))
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      render(<ResetPasswordPanel />)
+
+      await user.type(screen.getByLabelText('Student email'), 'asha@vitstudent.ac.in')
+      await user.click(screen.getByRole('button', { name: 'Reset password' }))
+      await screen.findByText('Tmp-9xQ2')
+
+      act(() => { vi.advanceTimersByTime(TEMP_PASSWORD_VISIBLE_MS) })
+      expect(screen.queryByText('Tmp-9xQ2')).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

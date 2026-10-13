@@ -1,16 +1,26 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { apiRequest } from '../api'
 import { LIMITS } from '../constants'
 
-function ResetPasswordPanel({ onSessionExpired }) {
+// The temporary password is sensitive; don't leave it on screen indefinitely
+export const TEMP_PASSWORD_VISIBLE_MS = 60000
+
+function ResetPasswordPanel({ id, onSessionExpired }) {
   const [email, setEmail] = useState('')
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
+  useEffect(() => {
+    if (!result) return
+    const timer = setTimeout(() => setResult(null), TEMP_PASSWORD_VISIBLE_MS)
+    return () => clearTimeout(timer)
+  }, [result])
+
   function handleChange(e) {
     setEmail(e.target.value)
     setResult(null)
+    setError('')
   }
 
   async function handleSubmit(e) {
@@ -34,9 +44,9 @@ function ResetPasswordPanel({ onSessionExpired }) {
   }
 
   return (
-    <div className="panel-card warden-section">
-      <h2 className="panel-heading">Reset a student's password</h2>
-      <form onSubmit={handleSubmit}>
+    <section id={id} tabIndex={-1} className="panel-card warden-section" aria-labelledby="reset-password-heading">
+      <h2 id="reset-password-heading" className="panel-heading">Reset a student's password</h2>
+      <form onSubmit={handleSubmit} noValidate>
         <div className="form-group">
           <label htmlFor="reset-email">Student email</label>
           <input
@@ -55,8 +65,14 @@ function ResetPasswordPanel({ onSessionExpired }) {
           <div className="reset-result" role="status">
             <p>Temporary password for {result.email}: <code>{result.temporaryPassword}</code></p>
             <p className="reset-note">
-              Share it with the student privately. They must choose a new password when they log in. It won't be shown again.
+              Share it with the student privately. They must choose a new password when they log in.
+              It won't be shown again and disappears from this screen in a minute.
             </p>
+            <div className="reset-actions">
+              <button type="button" className="btn btn-secondary" onClick={() => setResult(null)}>
+                Hide password
+              </button>
+            </div>
           </div>
         )}
 
@@ -64,7 +80,7 @@ function ResetPasswordPanel({ onSessionExpired }) {
           {submitting ? 'Resetting…' : 'Reset password'}
         </button>
       </form>
-    </div>
+    </section>
   )
 }
 
