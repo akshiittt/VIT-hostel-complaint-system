@@ -168,7 +168,11 @@ All errors are JSON `{ message }`.
 10. **Testing, performance and release pass (2026-10-14):**
     - **Tests:** full-stack journey tests (`npm run test:journeys`: React in jsdom + real API + in-memory MongoDB); tests for the backend error paths and the seed/index/server scripts; frontend component gaps filled; coverage scripts (backend 98.9% lines, frontend 96.1%); `docs/TESTING.md` with a regression map.
     - **Bug fixed:** a list load in flight overwrote a just-submitted complaint.
-    - **Performance (needs a deploy to take effect):** API region `bom1` (next to Atlas Mumbai), `/assets/*` cached as immutable, `/assets` excluded from the SPA rewrite, logo 87.7 → 10.7 KB, favicon → 2.6 KB.
+    - **Performance (deployed and verified 2026-10-14):**
+      - API runs in `bom1` (`x-vercel-id: bom1::bom1`). Unknown-user login went from ~1.1 s to 0.14–0.41 s; health is 0.12–0.45 s.
+      - `/assets/*` is cached as immutable, and a missing asset returns 404.
+      - Logo 10.7 KB, favicon 2.6 KB.
+    - **CD:** a post-deploy smoke workflow checks every production deploy (green on the first run). The CI journeys job is green on GitHub.
     - **Docs:** DEPLOY.md release checklist, rollback and env-var table; `docs/PROJECT_REVIEW.md` with scores, interview questions and decisions to explain.
 
 ### Left: owner actions (not code; see check.md)

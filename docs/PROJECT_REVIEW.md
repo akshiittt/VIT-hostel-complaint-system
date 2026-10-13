@@ -12,7 +12,7 @@ Senior-engineer and technical-interviewer review, 2026-10-14. Scores are for the
 | Build / audit | Production build OK (52.9 KB gzipped JS); `npm audit` 0 vulnerabilities in both projects |
 | CI | GitHub Actions green on every push so far; the new `journeys` job hasn't run on GitHub yet |
 | Production | `/api/health` ok; CORS, validation and the security headers checked live; read-only DB check: indexes present, no duplicates or orphans; the owner ran the student → warden → Completed flow on the live site |
-| Measured performance | API in Vercel `iad1` (US) while Atlas is in Mumbai: unknown-user login about 1.1 s, health 0.5–0.9 s warm. Fix (`bom1`) written but **not deployed yet**. |
+| Measured performance | Before: the API ran in `iad1` (US) while Atlas is in Mumbai, so an unknown-user login took ~1.1 s. **After deploying `bom1` (2026-10-14): 0.14–0.41 s, health 0.12–0.45 s**; assets are cached as immutable. |
 
 ## Implemented vs tested vs verified in production
 
@@ -27,7 +27,7 @@ Senior-engineer and technical-interviewer review, 2026-10-14. Scores are for the
 | Server-side logout (tokenVersion) | ✅ | ✅ | ⚠️ endpoint live (401 without token); real session not tested live |
 | Concurrent status 409 + statusHistory | ✅ | ✅ | ❌ |
 | Security headers / CSP | ✅ | ⚠️ checked by serving the build, no automated test | ✅ live headers, 0 CSP violations |
-| Region `bom1`, asset caching, smaller images | ✅ (local) | n/a | ❌ **not deployed** |
+| Region `bom1`, asset caching, smaller images | ✅ | n/a | ✅ verified live (`x-vercel-id: bom1`, `immutable`, 2.6 KB favicon) |
 | Email alerts, email verification, cleaning staff, admin | ❌ not built | — | — |
 
 ## Scores
@@ -40,7 +40,7 @@ Senior-engineer and technical-interviewer review, 2026-10-14. Scores are for the
 | Security & validation | **8/10** | Server-side authorization on every route, type-checked input (NoSQL injection blocked), rate limits shared across instances, bcrypt 12, revocable 1-day JWTs, CSP and frame protection, least-privilege DB user, no secrets in git or the bundle. Against: token in `localStorage` (CSP limits but doesn't remove the XSS-theft risk); logout ends **all** devices; no email verification; a warden can take over a student account via reset (audited, not prevented); credentials sat in Dropbox `.env` files until recently. |
 | Database design | **7/10** | Schemas match the domain, enums, partial unique index, indexes confirmed by query plans, TTL for rate limits, `statusHistory`. Against: no backups; `name`/`reg` copied into complaints (fine now, wrong if profiles become editable); automatic index builds don't finish on Vercel (needs the manual `db:indexes` step); no retention or deletion policy for personal data. |
 | Testing quality | **8.5/10** | Layered tests (unit, API, DB, auth, component, full-stack journeys), positive and negative cases, real MongoDB instead of mocks, a regression map in `docs/TESTING.md`, coverage measured. Against: **no real-browser E2E** (CSS, layout and real CORS unverified automatically), no automated accessibility audit, no load test, CSP/Vercel config untested, the journeys CI job hasn't run on GitHub. |
-| Performance | **6/10** (current production) | Small bundle and indexed queries. Against (measured): a cross-continent DB round trip on every query (about 1.1 s login, 0.5–0.9 s health); hashed assets not cached; 87 KB images; cold starts. The fixes for the first three are written but not deployed. **Expected 8/10 once deployed and verified.** |
+| Performance | **8/10** (after the 2026-10-14 deploy; was 6) | Small bundle and indexed queries. Against (measured): a cross-continent DB round trip on every query (about 1.1 s login, 0.5–0.9 s health); hashed assets not cached; 87 KB images; cold starts. The fixes for the first three are written but not deployed. **Expected 8/10 once deployed and verified.** |
 | Deployment reliability | **7/10** | Two Vercel projects, CI, health check, release checklist, rollback notes (incl. the env-var snapshot caveat), env-var reference. Against: real incidents during setup (`MANGO_URI` typo, stale `ALLOWED_ORIGINS`, a removed `JWT_SECRET`) show the config is fragile and manual; no staging environment (previews share the prod API and DB); Hobby rollback only goes back one deployment; no uptime monitoring or alerting. |
 | Documentation & setup | **8.5/10** | `README`, `DEPLOY.md` (step-by-step, troubleshooting, env table, rollback), `CLAUDE.md` (architecture + conventions + status), `docs/TESTING.md`, `check.md`. Against: a lot to read and some overlap; no architecture diagram; no API schema (OpenAPI); decisions are scattered instead of in short ADRs. |
 | End-to-end evidence | **7/10** | Production health, CORS, validation and headers checked; the owner's live flow left a Completed complaint in the DB; journeys cover the full flows locally. Against: password reset, forced change, logout revocation, rate limits and concurrency are verified only in tests, not on production; the performance fixes aren't live. |
@@ -51,10 +51,9 @@ Senior-engineer and technical-interviewer review, 2026-10-14. Scores are for the
 
 No **code** blockers: all suites pass and nothing in the code would stop a release. Before inviting real students:
 
-1. **Deploy and verify the performance changes** (region `bom1`, asset caching, images). Use the "Verify after a deploy" commands in DEPLOY.md.
-2. **Confirm the new `JWT_SECRET` is live** (log in on the site; or check that `npx vercel env ls production` shows it and the newest deployment is after it).
-3. **Owner security actions:** confirm the old `akshit` DB user is deleted; change/revoke the Gmail credential that was in the deleted prototype `.env`; set `SEED_WARDEN_PASSWORD=` to empty.
-4. **Accepted risk, not a blocker by your decision:** no backups.
+1. **Confirm the new `JWT_SECRET` is live** (log in on the site; or check that `npx vercel env ls production` shows it and the newest deployment is after it).
+2. **Owner security actions:** confirm the old `akshit` DB user is deleted; change/revoke the Gmail credential that was in the deleted prototype `.env`; set `SEED_WARDEN_PASSWORD=` to empty.
+3. **Accepted risk, not a blocker by your decision:** no backups.
 
 ## 2. Top five improvements by impact
 
