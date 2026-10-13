@@ -1,0 +1,36 @@
+name: Post-deploy smoke test
+
+# Vercel reports each deployment back to GitHub. When a production deploy
+# finishes, check the live site is actually healthy. Read-only requests only.
+on:
+  deployment_status:
+
+jobs:
+  smoke:
+    if: github.event.deployment_status.state == 'success' && github.event.deployment_status.environment == 'Production'
+    runs-on: ubuntu-latest
+    env:
+      API: https://vit-hostel-complaint-system.vercel.app
+      SITE: https://vit-hostel-complaint-system-bqsl.vercel.app
+    steps:
+      - name: API health (database reachable)
+        run: |
+          for i in 1 2 3 4 5; do
+            body=$(curl -s -m 20 "$API/api/health" || true)
+            echo "attempt $i: $body"
+            echo "$body" | grep -q '"status":"ok"' && exit 0
+            sleep 10
+          done
+          echo "::error::API health check failed after a production deploy"
+          exit 1
+      - name: Frontend loads with security headers
+        run: |
+          headers=$(curl -s -D - -o /dev/null -m 20 "$SITE/")
+          echo "$headers" | grep -qi '^HTTP/.* 200' || { echo "::error::frontend did not return 200"; exit 1; }
+          echo "$headers" | grep -qi '^content-security-policy:' || { echo "::error::CSP header missing"; exit 1; }
+          echo "frontend ok"
+      - name: Auth endpoint responds (no data written)
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" -m 20 "$API/api/auth/me")
+          echo "GET /api/auth/me without a token -> $code"
+          test "$code" = "401" || { echo "::error::expected 401 from /api/auth/me"; exit 1; }

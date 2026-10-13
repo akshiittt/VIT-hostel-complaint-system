@@ -12,6 +12,7 @@
     "dev": "node --watch server.js",
     "seed": "node seed.js",
     "test": "node --test --test-concurrency=1 \"test/**/*.test.js\"",
+    "test:coverage": "node --test --test-concurrency=1 --experimental-test-coverage --test-coverage-exclude=\"test/**\" --test-coverage-exclude=\"node_modules/**\" \"test/**/*.test.js\"",
     "db:indexes": "node scripts/db-indexes.js"
   },
   "dependencies": {

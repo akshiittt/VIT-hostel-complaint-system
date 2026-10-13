@@ -153,9 +153,9 @@ Backend tests 90/90, frontend 53/53. `npm audit` (all dependencies, including de
 - [ ] **H1** Change the Atlas password for user `akshit` (update Vercel + `backend/.env`), and delete `../vit-hostel-backend/vit-hostel-backend/.env`.
 - [ ] **H2** Change or revoke the Gmail credential that was in that old `.env`.
 - [ ] **M1** Limit the Atlas user to `readWrite` on the `vithostel` database.
-- [ ] **M4** Delete `SEED_WARDEN_PASSWORD` from `backend/.env`.
+- [ ] **M4** Leave `SEED_WARDEN_PASSWORD=` empty in `backend/.env`. Change the password in the app; set it per-command only if re-seeding.
 - [ ] **L2** Drop any leftover `test` database in Atlas.
-- [ ] **L3** Turn off GitHub Pages / delete the `gh-pages` branch.
+- [x] **L3** GitHub Pages: **kept on purpose, no redirect** (owner decision). Old frontend-only build, no data, no risk.
 
 ## Database audit (2026-10-13, sixth pass)
 
@@ -166,8 +166,8 @@ Backend tests 99/99 (3 consecutive runs), frontend 54/54. Production was inspect
 - [x] **D5** Index-build failures are logged (`index_error`); `npm run db:indexes` creates missing indexes without dropping anything.
 - [x] **D6** Password change and reset are single atomic writes (hash + `tokenVersion` together).
 - [x] **D7** `statusHistory` (who/when) and optimistic concurrency (a conflicting update → 409; the UI shows it and reloads).
-- [ ] **D1** (owner) Replace the `atlasAdmin` app user with `readWrite@vithostel`.
-- [ ] **D2** (owner) Backups: `mongodump` schedule and a test restore.
+- [x] **D1** The app uses `vithostel-app` (`readWrite@vithostel` only); verified via connectionStatus and live health. Delete the old `akshit` admin user in Atlas if you haven't yet.
+- [ ] **D2** Backups: **deferred by the owner** (no backups for now; revisit in a future update). Accepted risk: deleted or corrupted data can't be recovered.
 - [ ] **D8** (low) Duplicate-check race, deep-page `skip`, `/mine` cap indicator, retention/deletion policy.
 
 ## Accepted decisions (not fixing now)

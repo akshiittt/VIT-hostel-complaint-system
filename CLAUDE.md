@@ -116,6 +116,8 @@ All errors are JSON `{ message }`.
 
 ## Project status (2026-10-13)
 
+**Docs:** `docs/TESTING.md` (how to test, regression map, gaps), `docs/PROJECT_REVIEW.md` (scored review, blockers, interview prep).
+
 **Live:** frontend https://vit-hostel-complaint-system-bqsl.vercel.app, API https://vit-hostel-complaint-system.vercel.app (`/api/health` → `{"status":"ok","db":"ok"}`). Atlas database `vithostel`. Vercel deploys `main`; work happens on `vercel-backend` and is fast-forwarded into `main`. Backend tests 90/90, frontend 53/53, CI green, `npm audit` 0/0.
 
 ### Done
@@ -163,13 +165,19 @@ All errors are JSON `{ message }`.
    - Atlas cluster, two Vercel projects, warden seeded, live end-to-end test passed.
    - Deploy-time fixes: env var typo `MANGO_URI` → `MONGO_URI`, `ALLOWED_ORIGINS` updated.
 
+10. **Testing, performance and release pass (2026-10-14):**
+    - **Tests:** full-stack journey tests (`npm run test:journeys`: React in jsdom + real API + in-memory MongoDB); tests for the backend error paths and the seed/index/server scripts; frontend component gaps filled; coverage scripts (backend 98.9% lines, frontend 96.1%); `docs/TESTING.md` with a regression map.
+    - **Bug fixed:** a list load in flight overwrote a just-submitted complaint.
+    - **Performance (needs a deploy to take effect):** API region `bom1` (next to Atlas Mumbai), `/assets/*` cached as immutable, `/assets` excluded from the SPA rewrite, logo 87.7 → 10.7 KB, favicon → 2.6 KB.
+    - **Docs:** DEPLOY.md release checklist, rollback and env-var table; `docs/PROJECT_REVIEW.md` with scores, interview questions and decisions to explain.
+
 ### Left: owner actions (not code; see check.md)
 
-- [ ] **Database user is `atlasAdmin`** (confirmed by a read-only check). Create a least-privilege user, `readWrite` on `vithostel` only, and switch to it (safe order below).
+- [x] **Database user:** the app now connects as `vithostel-app` with only `readWrite@vithostel` (verified 2026-10-13: roles, no access to `admin.system.users`, live health ok). Confirm the old `atlasAdmin` user `akshit` is deleted in Atlas → Database Access.
 - [ ] Confirm the production `JWT_SECRET` is the long random value.
-- [ ] Change the Atlas password, which is in plaintext in Dropbox-synced `.env` files. Delete `../vit-hostel-backend/vit-hostel-backend/.env` and change/revoke the Gmail credential that was in it.
-- [ ] Remove `SEED_WARDEN_PASSWORD` from `backend/.env`.
-- [ ] Turn off GitHub Pages / delete the `gh-pages` branch.
+- [x] Old prototype `.env` deleted. [ ] Change/revoke the Gmail credential that was in it, and make sure the old DB user `akshit` is deleted (its password was in that file).
+- [ ] Leave `SEED_WARDEN_PASSWORD=` **empty** in `backend/.env`. Change the warden password in the app instead. To re-run the seed, set it only for that one command (`$env:SEED_WARDEN_PASSWORD="…"` in PowerShell). With it empty, the seed stops safely before connecting.
+- GitHub Pages (`gh-pages` branch, the old frontend-only React build): **kept on purpose by the owner, with no redirect** (2026-10-13). It has no backend or data, so there's no security risk. Don't delete or replace it.
 - [x] Leftover `test` database: checked, there is none.
 
 ### Left: database audit improvements (prioritised; not implemented yet)
@@ -178,8 +186,8 @@ Read-only live check: users 2 (1 student, 1 warden), complaints 1. All indexes e
 
 | # | Priority | Improvement | Safest way to do it |
 |---|---|---|---|
-| D1 | Critical | App connects as **atlasAdmin**, so a leaked `MONGO_URI` means full control of the cluster | In Atlas, create user `vithostel-app` with `readWrite@vithostel` → put its URI in Vercel `MONGO_URI` → redeploy → `/api/health` ok → only then remove admin rights from (or delete) the old user. Keep an admin user only for yourself, never in the app. |
-| D2 | High | **No backups**: Atlas M0 has no automated snapshots | Before any schema or index change, and on a schedule (e.g. weekly), run `mongodump --uri <readonly-user-uri> --db vithostel`, keep it encrypted outside Dropbox, and test `mongorestore --nsFrom vithostel.* --nsTo restoretest.*` into a scratch database. Consider an Atlas Flex/M10 tier for automatic snapshots. |
+| D1 ✅ done (`vithostel-app`, `readWrite@vithostel`) | Critical | App connected as **atlasAdmin**, so a leaked `MONGO_URI` means full control of the cluster | In Atlas, create user `vithostel-app` with `readWrite@vithostel` → put its URI in Vercel `MONGO_URI` → redeploy → `/api/health` ok → only then remove admin rights from (or delete) the old user. Keep an admin user only for yourself, never in the app. |
+| D2 ⏸ deferred by owner (2026-10-13: no backups for now, revisit in a future update) | High | **No backups**: Atlas M0 has no automated snapshots. The cluster's 3 copies protect against a server failing, **not** against deleted data, bad changes or bugs. Free options when revisited: an `npm run db:backup`/`db:restore` script (JSON export via the driver, restore into a scratch DB), or `mongodump`. | Before any schema or index change, and on a schedule (e.g. weekly), run `mongodump --uri <readonly-user-uri> --db vithostel`, keep it encrypted outside Dropbox, and test `mongorestore --nsFrom vithostel.* --nsTo restoretest.*` into a scratch database. Consider an Atlas Flex/M10 tier for automatic snapshots. |
 | D3 ✅ done | High | Connection pool: Mongoose defaults to `maxPoolSize` 100 per serverless instance, against M0's ~500-connection cap | `lib/db.js` connect options `{ maxPoolSize: 10, minPoolSize: 0, maxIdleTimeMS: 60000 }`. Code-only, no data change. |
 | D4 ✅ done | Medium | Stat-box counts (`status: 'Completed'`, `status ≠ 'Completed'`) do a **full collection scan** on every warden page load (confirmed with explain) | Add a `{ status: 1, urgent: -1, createdAt: -1 }` index. It's tiny today, so building it is instant. |
 | D5 ✅ done (kept autoIndex, failures now logged, plus `npm run db:indexes`) | Medium | Indexes are built implicitly by Mongoose `autoIndex` at cold start, and failures are silent | Set `autoIndex: false` in production and add an explicit `npm run db:indexes` script using **`createIndexes()` (non-destructive)**. **Never `syncIndexes()` against production: it drops indexes not in the schema.** |

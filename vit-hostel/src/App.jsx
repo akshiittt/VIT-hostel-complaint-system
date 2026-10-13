@@ -160,6 +160,11 @@ function App() {
       }
       throw error
     }
+    // A list load still in flight (e.g. Refresh pressed just before) was
+    // requested before this complaint existed; discard its older snapshot so
+    // it can't overwrite the list and hide the new complaint
+    requestIdRef.current++
+    setLoadingComplaints(false)
     setComplaints((prev) => [saved, ...prev])
     return true
   }

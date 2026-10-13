@@ -13,7 +13,7 @@ Data lives in MongoDB Atlas (free tier).
 
 The old cluster (`vithostel.qouumxh.mongodb.net`) no longer exists, so make a new one.
 
-1. Go to <https://cloud.mongodb.com>, then **Create** a cluster. Pick the **free (M0)** tier and any nearby region, such as Mumbai.
+1. Go to <https://cloud.mongodb.com>, then **Create** a cluster. Pick the **free (M0)** tier and a region near your users, such as Mumbai. The API's Vercel region (`regions` in `backend/vercel.json`, currently `bom1` Mumbai) should match it.
 2. **Database Access → Add New Database User.** Choose username + password, role "Read and write to any database".
 3. **Network Access → Add IP Address → Allow access from anywhere (`0.0.0.0/0`).** This is needed because Vercel's IPs change.
 4. **Connect → Drivers.** Copy the connection string and put your password in it. Then add the database name `vithostel` after `.net/`:
@@ -37,6 +37,7 @@ The code is on the `vercel-backend` branch. Push it, then either merge it into `
    - `ALLOWED_EMAIL_DOMAINS` (recommended): `vitstudent.ac.in`, so only university emails can sign up. Leave it empty to allow any email.
 4. Deploy. Then open `https://<api-project>.vercel.app/api/health`. It should show `{"status":"ok","db":"ok"}`. `"db":"unreachable"` means Atlas isn't reachable: check `MONGO_URI` and Atlas Network Access.
    `vercel.json` pins the framework to "Other", so Vercel always runs `api/index.js`.
+   It also pins the function region to **`bom1` (Mumbai)**, next to the Atlas cluster. If your cluster is in a different region, change `regions` to match (see [Performance](#performance)).
 
 ## 4. Deploy the frontend
 
@@ -89,14 +90,130 @@ npm run seed
 
 ## Database maintenance
 
-- Indexes are created automatically the first time the API uses each collection. A failure (e.g. a unique index blocked by duplicates) shows up as an `index_error` line in Vercel → Logs.
+- **After any deploy that adds or changes an index, run `npm run db:indexes`.** Vercel freezes the function right after each response, so Mongoose's automatic background index build often doesn't finish in production (this happened with the status index on 2026-10-13).
+- Mongoose still tries to create indexes automatically the first time the API uses each collection. A failure (e.g. a unique index blocked by duplicates) shows up as an `index_error` line in Vercel → Logs.
 - To create missing indexes explicitly, run this from `backend/`:
   ```bash
   npm run db:indexes
   ```
   It only **adds** indexes and never drops indexes or data. If your network's DNS blocks `mongodb+srv` lookups, prefix it with `DNS_SERVERS=8.8.8.8,1.1.1.1`.
-- **Backups:** the free Atlas tier has no automatic snapshots, so take one with `mongodump` before any schema change (see CLAUDE.md → database audit, D2).
+- **Backups:** none, by decision (2026-10-13). The free Atlas tier has no automatic snapshots, so deleted or corrupted data can't be recovered. Be extra careful with any command that writes to production. Revisit in a future update (see CLAUDE.md → D2).
 - Complaints keep a `statusHistory` (status, warden, time). Two wardens changing the same complaint at once: the second gets a 409 and sees the refreshed list.
+
+## Release checklist
+
+Go through this before promoting anything to production (that is, before pushing or merging to `main`).
+
+**Before deploying**
+
+- [ ] Tests pass locally: `cd backend && npm test` and `cd vit-hostel && npm test`.
+- [ ] The frontend builds: `cd vit-hostel && npm run build`.
+- [ ] CI is green on the commit you're shipping (GitHub → Actions).
+- [ ] Every environment variable the change needs exists in **both** Vercel projects' Production environment (see [Environment variables](#environment-variables)). New or changed variables only take effect after a redeploy.
+- [ ] If the API URL changed: update `VITE_API_URL` in the frontend project **and** `connect-src` in `vit-hostel/vercel.json`. If the frontend URL changed: update `ALLOWED_ORIGINS` in the API project.
+- [ ] Any schema change is additive only (new optional fields with defaults, new indexes). See the migration rules in CLAUDE.md.
+
+**Deploy order**
+
+- If the change touches the API contract (new or changed routes, fields or status codes), deploy the **backend first**, check `/api/health`, then deploy the frontend. The old frontend keeps working against the new API, but a new frontend against the old API may not.
+- Frontend-only or backend-only changes can go on their own.
+
+**Right after deploying**
+
+- [ ] If the release added or changed an index: `cd backend && npm run db:indexes` (see [Database maintenance](#database-maintenance)).
+- [ ] `/api/health` returns `{"status":"ok","db":"ok"}`.
+- [ ] Log in on the live site as a student and as the warden. The dashboards load, and a status change saves.
+- [ ] Browser DevTools → Console shows no CSP violations or failed requests.
+- [ ] The response headers look right (commands under [Verify after a deploy](#verify-after-a-deploy)): security headers on every path, `immutable` only on `/assets/*`.
+- [ ] Vercel → API project → Logs show no new `index_error`, `db_unavailable` or 500s.
+
+## Rollback
+
+**Fastest (no code change): Vercel Instant Rollback.** For each affected project: Vercel → Project → **Deployments** → find the previous deployment marked **Ready** in **Production** → ⋯ → **Instant Rollback**. On some plans the menu says **Promote to Production**. This reuses that deployment's build, so it takes seconds. Roll back the frontend and backend separately. If a release changed the API contract, roll back the **frontend first**, then the backend.
+
+Things to know:
+- On the Hobby plan you can only roll back to the deployment that was in production **immediately before** the current one. To go further back, use **Promote to Production** on an older Ready deployment, or the git route below.
+- After an Instant Rollback, Vercel stops auto-promoting new pushes to production until you promote a deployment again. Remember to undo this once the fix is in.
+- **Environment variables are not rolled back in the dashboard, but the old deployment uses its own.** Every deployment keeps the env var values it was built with. A rollback therefore runs with the **old** values, while Settings still shows the new ones. Don't roll back blindly past an env var change. Example: rolling the API back to a deployment from before the `MONGO_URI` switch to `vithostel-app` would use the old (deleted) database user and break the DB connection. If an env var change caused the problem, fix the variable in Settings → Environment Variables and **redeploy** instead.
+
+**Through git:** `git revert <bad-commit>` on `main` and push. Vercel builds and deploys the revert like any other commit. Use this to make the rollback permanent after an Instant Rollback, so the next push doesn't bring the bug back.
+
+**Database:** schema changes in this project are additive only (new optional fields and new indexes), so running older code against the current database is safe. Older code just ignores the new fields. **There are no backups** (Atlas M0, see [Database maintenance](#database-maintenance)), so a code rollback can't undo data a bad release wrote or deleted. Never try to "roll back" data with `deleteMany`, `dropDatabase` or `syncIndexes`.
+
+**Config files:** rolling back also rolls back `vercel.json` (headers, region). If the bad release was a CSP change that blocks the API, rolling back the frontend fixes it straight away.
+
+## Environment variables
+
+Set them in Vercel → Project → Settings → Environment Variables (Production), or in `backend/.env` / `vit-hostel/.env` locally (copy the `.env.example` files). Never commit real values.
+
+**API project (`backend/`)**
+
+| Name | Required? | Where it's used | Notes / example |
+|---|---|---|---|
+| `MONGO_URI` | **Yes** | `lib/db.js`, seed, scripts | `mongodb+srv://USER:PASSWORD@CLUSTER.mongodb.net/vithostel?retryWrites=true&w=majority`. Use the least-privilege app user (`readWrite@vithostel`). Without it, `/api` returns 500 and `/api/health` returns 503 and names the missing variable. |
+| `JWT_SECRET` | **Yes** | `lib/token.js`, `middleware/auth.js` | Long random string, e.g. `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`. Changing it logs everyone out. |
+| `ALLOWED_ORIGINS` | **Yes** in production | CORS in `app.js` | Comma-separated exact origins, e.g. `https://<frontend>.vercel.app,http://localhost:5173`. Trailing slash and case are ignored. A frontend origin that isn't listed can't call the API. |
+| `ALLOWED_EMAIL_DOMAINS` | Recommended | Registration | Comma-separated, e.g. `vitstudent.ac.in`. Empty means any email domain can sign up. |
+| `LOG_LEVEL` | No | `lib/logger.js` | Only value: `silent` (turns off the JSON logs; the tests use it). Leave it unset in production so Vercel Logs keep the request and audit trail. |
+| `PORT` | Local only | `server.js` | Default `5000`. Vercel ignores it. |
+| `BCRYPT_ROUNDS` | **Tests only** | `lib/passwordPolicy.js` | Tests set `4` for speed. **Never set it in production**: the default is 12, and a lower value weakens every new password hash. |
+| `DNS_SERVERS` | Scripts only | `npm run db:indexes` / seed (local) | e.g. `8.8.8.8,1.1.1.1`, when local DNS blocks `mongodb+srv` lookups. Not needed on Vercel. |
+| `SEED_WARDEN_NAME`, `SEED_WARDEN_EMAIL`, `SEED_WARDEN_PASSWORD` | Seed only | `seed.js` (`npm run seed`, from your laptop) | Password: 12+ characters and required for any non-local DB. Keep `SEED_WARDEN_PASSWORD` empty in `.env` and set it only for the one command. Never add these to Vercel. |
+| `VERCEL` | Set by Vercel | `app.js` (`trust proxy`) | Don't set it yourself. It tells the app that `X-Forwarded-For` is trustworthy. |
+
+**Frontend project (`vit-hostel/`)**
+
+| Name | Required? | Where it's used | Notes / example |
+|---|---|---|---|
+| `VITE_API_URL` | **Yes** in production | `src/api.js` | `https://<api-project>.vercel.app` (no trailing slash). It's **baked in at build time**, so changing it needs a redeploy. It must match `connect-src` in `vit-hostel/vercel.json`'s CSP, or the browser blocks every API call. Defaults to `http://localhost:5000`. |
+
+## Performance
+
+**API region.** `backend/vercel.json` sets `"regions": ["bom1"]` (Mumbai), because the Atlas cluster is in Mumbai. Every API request makes several sequential database round trips (a login does about 4: three rate-limit updates and a user lookup). With the function in Vercel's default region (`iad1`, Washington DC), each round trip crossed the world (~200+ ms), so `/api/health` took 0.5–0.9 s warm and a failed login about 1.1 s. With the function next to the database, each round trip is a few ms.
+- **If you ever move the Atlas cluster to another region, change `regions` to the matching Vercel region** (e.g. Singapore → `sin1`, Frankfurt → `fra1`), or the API gets slow again.
+- Trade-off: users far from India (e.g. in the US) get a little more latency on their first hop to the function. That's the right call here, because the users are in India and the database trips dominate.
+- The Hobby plan allows **one** function region, which is all this needs. Vercel → API project → Settings → Functions shows the effective region. `vercel.json` takes precedence over the dashboard setting.
+- Cold starts (first request after the function has been idle) still add 1–2 s: Node boots and opens a new MongoDB connection. That's expected on serverless.
+
+**Static asset caching.** `vit-hostel/vercel.json` serves `/assets/*` with `Cache-Control: public, max-age=31536000, immutable`. Vite gives these files content-hashed names (`index-<hash>.js`), so a new build always means new URLs, and browsers can safely keep the old ones for a year without revalidating. `index.html`, `/favicon.jpg` and every other path keep Vercel's default `max-age=0, must-revalidate`, so a new deploy shows up on the next page load. The security-headers rule (`/(.*)`) still matches `/assets/*` too: Vercel applies every matching rule, and only duplicate keys are overridden by the later rule.
+- Don't put non-hashed files in `/assets/` (e.g. through `public/assets/`), or they'll be cached for a year with no way to update them.
+
+**Images.** The logo (`src/assets/vit-logo.jpg`) is 160×160 (2× its largest display size of 80 px), and the favicon is 64×64. Don't swap in a full-size source image again.
+
+### Verify after a deploy
+
+Run these from any machine (Git Bash, macOS or Linux; on Windows PowerShell use `curl.exe`):
+
+```bash
+API=https://vit-hostel-complaint-system.vercel.app
+FE=https://vit-hostel-complaint-system-bqsl.vercel.app
+
+# 1. API latency: run 5 times. Ignore the first (it may be a cold start).
+#    Before the region pin: 0.5–0.9 s warm. Expect roughly 0.1–0.2 s from India.
+for i in 1 2 3 4 5; do curl -s -o /dev/null -w "%{http_code} %{time_total}s\n" $API/api/health; done
+
+# 2. Which region served it: the x-vercel-id header should contain ::bom1:: (it was ::iad1:: before)
+curl -sI $API/api/health | grep -i x-vercel-id
+
+# 3. Hashed assets are immutable and still carry the security headers
+ASSET=$(curl -s $FE/ | grep -oE '/assets/index-[^"]+\.js' | head -1); echo $ASSET
+curl -sI $FE$ASSET | grep -iE "cache-control|content-security-policy|x-frame-options|x-content-type-options"
+#    expect: cache-control: public, max-age=31536000, immutable  (+ CSP, DENY, nosniff)
+
+# 4. index.html and the favicon are NOT immutable
+curl -sI $FE/ | grep -iE "cache-control|content-security-policy"
+curl -sI $FE/favicon.jpg | grep -iE "cache-control|content-length"
+#    expect: cache-control: public, max-age=0, must-revalidate (+ CSP on /); favicon about 2.5 kB
+```
+
+Then log in on the live site and check the browser console for errors.
+
+## Continuous deployment
+
+- **Deploys:** Vercel deploys `main` automatically for both projects. Other branches get preview URLs.
+- **Before deploys:** CI (`.github/workflows/ci.yml`) runs on every push and PR.
+- **After deploys:** `.github/workflows/post-deploy.yml` runs after every successful **production** deploy and checks, read-only, that `/api/health` is ok, the frontend returns 200 with a CSP, and `/api/auth/me` answers 401. A red run there means roll back (see Rollback).
+- **Gate deploys on CI (recommended, owner setting):** GitHub → Settings → Branches → add a rule for `main`: require a pull request and require the `backend`, `frontend` and `journeys` checks. Then work on a branch, open a PR, wait for green CI, and merge; the merge deploys.
 
 ## Running locally
 

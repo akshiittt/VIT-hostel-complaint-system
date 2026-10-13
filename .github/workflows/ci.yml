@@ -41,3 +41,28 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+
+  # Full-stack journeys: the real React app in jsdom against the real API and
+  # an in-memory MongoDB (not a browser E2E). Needs both packages installed.
+  journeys:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            vit-hostel/package-lock.json
+      # Same MongoDB binary cache as the backend job
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongodb-binaries-${{ runner.os }}-${{ hashFiles('backend/package-lock.json') }}
+      - run: npm ci
+        working-directory: backend
+      - run: npm ci
+        working-directory: vit-hostel
+      - run: npm run test:journeys
+        working-directory: vit-hostel
