@@ -7,7 +7,8 @@ on:
 
 jobs:
   smoke:
-    if: github.event.deployment_status.state == 'success' && github.event.deployment_status.environment == 'Production'
+    # Vercel names environments like "Production – <project-name>"
+    if: github.event.deployment_status.state == 'success' && startsWith(github.event.deployment_status.environment, 'Production')
     runs-on: ubuntu-latest
     env:
       API: https://vit-hostel-complaint-system.vercel.app
