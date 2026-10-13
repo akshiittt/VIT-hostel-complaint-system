@@ -2,7 +2,8 @@ const express = require('express')
 const User = require('../models/User')
 const { protect, allowRoles } = require('../middleware/auth')
 const { isValidBlock, LIMITS, REG_NUMBER_PATTERN, RATE_LIMITS } = require('../lib/constants')
-const { passwordProblem } = require('../lib/passwordPolicy')
+const bcrypt = require('bcryptjs')
+const { passwordProblem, bcryptRounds } = require('../lib/passwordPolicy')
 const { log } = require('../lib/logger')
 const { allowedEmailDomains } = require('../lib/config')
 const { isBlank, tooLongMessage } = require('../lib/validation')
@@ -100,12 +101,27 @@ router.post('/login', loginPerIpEmail, loginPerEmail, loginPerIp, async (req, re
     return res.status(401).json({ message: 'Invalid email or password' })
   }
 
+  // Re-hash passwords stored at an older, cheaper cost now that we have the
+  // plain text. tokenVersion is untouched, so no session is affected.
+  if (bcrypt.getRounds(user.password) < bcryptRounds()) {
+    user.password = password
+    await user.save({ validateModifiedOnly: true })
+  }
+
   log('login', { userId: String(user._id), role: user.role })
   res.json({ token: generateToken(user), user: user.toPublic() })
 })
 
 router.get('/me', protect, (req, res) => {
   res.json(req.user.toPublic())
+})
+
+// Ends the session on the server, not just in the browser: bumping
+// tokenVersion invalidates every token this user holds (all devices).
+router.post('/logout', protect, async (req, res) => {
+  await bumpTokenVersion(req.user._id)
+  log('logout', { userId: String(req.user._id) })
+  res.status(204).end()
 })
 
 // Any logged-in user changes their own password. A wrong current password is

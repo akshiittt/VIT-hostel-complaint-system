@@ -1,6 +1,7 @@
 const mongoose = require('mongoose')
 const bcrypt = require('bcryptjs')
 const { LIMITS } = require('../lib/constants')
+const { bcryptRounds } = require('../lib/passwordPolicy')
 
 const userSchema = new mongoose.Schema({
   name: {
@@ -81,7 +82,7 @@ userSchema.index({ regNumber: 1 }, { unique: true, partialFilterExpression: { ro
 // the plain password, otherwise it would be hashed twice and login would fail.
 userSchema.pre('save', async function () {
   if (!this.isModified('password')) return
-  const salt = await bcrypt.genSalt(10)
+  const salt = await bcrypt.genSalt(bcryptRounds())
   this.password = await bcrypt.hash(this.password, salt)
 })
 

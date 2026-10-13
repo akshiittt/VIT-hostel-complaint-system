@@ -80,6 +80,8 @@ npm run seed
   The client IP comes from `X-Forwarded-For` **only on Vercel**, which sets the `VERCEL` variable and overwrites that header. Hosted anywhere else, the header is ignored, so it can't be spoofed to dodge the limits.
 - **Passwords:** students need at least 8 characters, and very common passwords are rejected. The warden password set by `npm run seed` needs at least 12.
 - **Logs:** one JSON line per request (method, path, status, ms, user id) plus `login`, `login_failed`, `password_changed`, `password_reset` and `db_unavailable` events, in Vercel → Logs. Request bodies, passwords, tokens and temporary passwords are never logged. Set `LOG_LEVEL=silent` to turn logging off.
+- **Sessions:** login tokens last 1 day. **Logout ends the session on the server** (on every device). Passwords use bcrypt cost 12, and older hashes are upgraded at the next login.
+- **Frontend security headers** (`vit-hostel/vercel.json`): Content-Security-Policy, `X-Frame-Options: DENY`, `nosniff`, Referrer-Policy and Permissions-Policy. The CSP only allows API calls to `https://vit-hostel-complaint-system.vercel.app`. **If your API domain changes, update `connect-src` in that file**, or the site can't reach the API.
 - **Warden resets** record `passwordResetAt` and `passwordResetBy` on the student, and the student sees when the reset happened.
 - **Database outage:** API calls return 503 "The service is temporarily unavailable" with `Retry-After: 30` within about 5 s, instead of a generic error.
 - **Forgotten passwords:** there's no email reset yet. The warden uses "Reset a student's password" in the warden panel and gives the student the temporary password privately. To change the warden's own password, use "Change password" in the app, or re-run `npm run seed`.
@@ -104,6 +106,7 @@ Run the backend tests with `cd backend && npm test`. They use a temporary in-mem
 |---|---|---|---|---|
 | POST | `/api/auth/register` | anyone | Student sign-up → `{ token, user }` | 201; 400 invalid input, weak password, bad reg number or email domain; 409 email or reg number taken; 429 |
 | POST | `/api/auth/login` | anyone | Email + password → `{ token, user }` | 200; 400; 401 wrong email/password; 429 |
+| POST | `/api/auth/logout` | logged in | Ends all of the user's sessions (bumps tokenVersion) | 204; 401 |
 | GET | `/api/auth/me` | logged in | Current user (`mustChangePassword`, `passwordResetAt`) | 200; 401 |
 | POST | `/api/auth/change-password` | logged in | `{ currentPassword, newPassword }` → new `{ token, user }`; logs out other sessions | 200; 400 (incl. wrong current password); 401; 429 |
 | POST | `/api/auth/reset-password` | warden | `{ email }` → `{ email, temporaryPassword }`; student must change it at next login | 200; 400; 401; 403 not a warden; 404 no such student; 429 |

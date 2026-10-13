@@ -19,6 +19,8 @@ before(async () => {
   process.env.JWT_SECRET = 'test-secret'
   process.env.VERCEL = '1'
   process.env.LOG_LEVEL = 'silent'
+  // Low cost keeps the suite fast; production always uses the default 12
+  process.env.BCRYPT_ROUNDS = '4'
   app = require('../app')
   User = require('../models/User')
   Complaint = require('../models/Complaint')
@@ -275,4 +277,78 @@ test('L9: tokenVersion is bumped atomically by password changes', async () => {
   assert.equal(stored.tokenVersion, 1)
   const me = await request(app).get('/api/auth/me').set(bearer(res.body.token))
   assert.equal(me.status, 200)
+})
+
+// --- Security audit fixes (M3, L4) ---
+
+test('M3: login tokens expire after one day', async () => {
+  const { token } = await registerStudent()
+  const { iat, exp } = require('jsonwebtoken').decode(token)
+  assert.equal(exp - iat, 24 * 60 * 60)
+})
+
+test('M3: logout ends the session on the server', async () => {
+  const s = await registerStudent()
+  const out = await request(app).post('/api/auth/logout').set(bearer(s.token))
+  assert.equal(out.status, 204)
+  assert.equal(out.headers['cache-control'], 'no-store')
+
+  const after = await request(app).get('/api/auth/me').set(bearer(s.token))
+  assert.equal(after.status, 401)
+  assert.equal(after.body.message, 'Session expired, please log in again')
+
+  const again = await request(app).post('/api/auth/login').send({ email: student.email, password: student.password })
+  assert.equal(again.status, 200)
+  assert.equal((await request(app).get('/api/auth/me').set(bearer(again.body.token))).status, 200)
+})
+
+test('M3: logout without a valid token is a 401, not a crash', async () => {
+  const res = await request(app).post('/api/auth/logout')
+  assert.equal(res.status, 401)
+})
+
+test('L4: bcrypt uses 12 rounds unless a test overrides it', () => {
+  const { bcryptRounds } = require('../lib/passwordPolicy')
+  const saved = process.env.BCRYPT_ROUNDS
+  try {
+    delete process.env.BCRYPT_ROUNDS
+    assert.equal(bcryptRounds(), 12)
+    process.env.BCRYPT_ROUNDS = 'abc'
+    assert.equal(bcryptRounds(), 12)
+    process.env.BCRYPT_ROUNDS = '2'
+    assert.equal(bcryptRounds(), 12, 'values below 4 are ignored')
+    process.env.BCRYPT_ROUNDS = '4'
+    assert.equal(bcryptRounds(), 4)
+  } finally {
+    if (saved === undefined) delete process.env.BCRYPT_ROUNDS
+    else process.env.BCRYPT_ROUNDS = saved
+  }
+})
+
+test('L4: new password hashes use the configured cost', async () => {
+  const s = await registerStudent()
+  const stored = await User.findById(s.user._id).select('+password').lean()
+  const cost = Number(stored.password.split('$')[2])
+  assert.equal(cost, require('../lib/passwordPolicy').bcryptRounds())
+})
+
+test('L4: an older, cheaper hash is upgraded on the next successful login', async () => {
+  const s = await registerStudent() // hashed at the suite's cost (4)
+  const costOf = async () => Number((await User.findById(s.user._id).select('+password').lean()).password.split('$')[2])
+  assert.equal(await costOf(), 4)
+
+  process.env.BCRYPT_ROUNDS = '5'
+  try {
+    const wrong = await request(app).post('/api/auth/login').send({ email: student.email, password: 'not-the-password' })
+    assert.equal(wrong.status, 401)
+    assert.equal(await costOf(), 4, 'a failed login changes nothing')
+
+    const ok = await request(app).post('/api/auth/login').send({ email: student.email, password: student.password })
+    assert.equal(ok.status, 200)
+    assert.equal(await costOf(), 5)
+    // The upgrade must not end the session it just created
+    assert.equal((await request(app).get('/api/auth/me').set(bearer(ok.body.token))).status, 200)
+  } finally {
+    process.env.BCRYPT_ROUNDS = '4'
+  }
 })

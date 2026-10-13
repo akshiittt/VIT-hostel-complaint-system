@@ -440,3 +440,41 @@ describe('App audit fixes', () => {
     expect(localStorage.getItem(TOKEN_KEY)).toBe('new-token')
   })
 })
+
+describe('App logout', () => {
+  it('ends the session on the server, then shows the login page', async () => {
+    localStorage.setItem(TOKEN_KEY, 'good-token')
+    const fetchMock = vi.fn(routeFetch({
+      'GET /api/auth/me': [200, studentUser],
+      'GET /api/complaints/mine': [200, []],
+      'POST /api/auth/logout': [204, {}]
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(await screen.findByRole('button', { name: 'Logout' }))
+
+    expect(await screen.findByRole('button', { name: 'Login' })).toBeInTheDocument()
+    const [[, options]] = callsTo(fetchMock, '/api/auth/logout')
+    expect(options.method).toBe('POST')
+    expect(options.headers.Authorization).toBe('Bearer good-token')
+    expect(localStorage.getItem(TOKEN_KEY)).toBeNull()
+    expect(screen.queryByText('Your session expired. Please log in again.')).not.toBeInTheDocument()
+  })
+
+  it('still logs out locally when the server cannot be reached', async () => {
+    localStorage.setItem(TOKEN_KEY, 'good-token')
+    vi.stubGlobal('fetch', vi.fn(async (url, options = {}) => {
+      if (new URL(url).pathname === '/api/auth/logout') throw new TypeError('Failed to fetch')
+      return routeFetch({ 'GET /api/auth/me': [200, studentUser], 'GET /api/complaints/mine': [200, []] })(url, options)
+    }))
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(await screen.findByRole('button', { name: 'Logout' }))
+
+    expect(await screen.findByRole('button', { name: 'Login' })).toBeInTheDocument()
+    expect(localStorage.getItem(TOKEN_KEY)).toBeNull()
+  })
+})

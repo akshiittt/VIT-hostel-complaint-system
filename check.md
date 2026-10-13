@@ -133,6 +133,30 @@ Backend tests 84/84, frontend 51/51. The audit probe was re-run against the fixe
   - Status codes documented in DEPLOY.md.
 - [ ] **L8** (kept on purpose): `/api/health` lists missing env var *names*. This is a debugging aid; no values are ever shown.
 
+## Defensive security audit (2026-10-13, fifth pass)
+
+Backend tests 90/90, frontend 53/53. `npm audit` (all dependencies, including dev): **0 vulnerabilities** in both projects. CSP checked by serving the build with the production headers: 0 violations across login, the warden list, a status change and logout.
+
+**Verified clean:**
+- No secrets in git history (any branch) or in the live bundle; source maps return 403.
+- NoSQL injection blocked; XSS and CSRF don't apply; access to other students' data blocked.
+- CORS, error messages and rate limits all checked live.
+
+**Fixed in code:**
+- [x] **M2** Frontend security headers: CSP (incl. `frame-ancestors 'none'`), X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy.
+- [x] **M3** Tokens expire after 1 day instead of 7. `POST /api/auth/logout` ends the session on the server, and the Logout buttons call it.
+- [x] **L4** bcrypt cost 12, with existing hashes upgraded at the next login.
+- [x] **L1** Dev-dependency vulnerabilities: nodemon → `node --watch` (removes `braces`); Vitest 3 → 5 (removes `tinypool`/`@vitest/mocker`).
+
+**Owner actions (not code):**
+- [ ] **V1** Confirm the production `JWT_SECRET` is the long random value (replace it if unsure; everyone is logged out once).
+- [ ] **H1** Change the Atlas password for user `akshit` (update Vercel + `backend/.env`), and delete `../vit-hostel-backend/vit-hostel-backend/.env`.
+- [ ] **H2** Change or revoke the Gmail credential that was in that old `.env`.
+- [ ] **M1** Limit the Atlas user to `readWrite` on the `vithostel` database.
+- [ ] **M4** Delete `SEED_WARDEN_PASSWORD` from `backend/.env`.
+- [ ] **L2** Drop any leftover `test` database in Atlas.
+- [ ] **L3** Turn off GitHub Pages / delete the `gh-pages` branch.
+
 ## Accepted decisions (not fixing now)
 
 - **JWT in localStorage, 7-day expiry, no server-side revocation.** Acceptable because there are no XSS sinks (React escaping, no `dangerouslySetInnerHTML`). httpOnly cookies would need SameSite/CSRF handling across two Vercel domains. Revisit if an admin role is added in phase 2.

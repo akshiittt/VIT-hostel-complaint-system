@@ -28,4 +28,13 @@ function passwordProblem(password) {
   return null
 }
 
-module.exports = { passwordProblem, MIN_PASSWORD_LENGTH, COMMON_PASSWORDS }
+const DEFAULT_BCRYPT_ROUNDS = 12
+
+// bcrypt work factor. Always 12 in production; the test suites set
+// BCRYPT_ROUNDS=4 to stay fast. Values outside 4–15 are ignored.
+function bcryptRounds() {
+  const rounds = Number.parseInt(process.env.BCRYPT_ROUNDS, 10)
+  return Number.isInteger(rounds) && rounds >= 4 && rounds <= 15 ? rounds : DEFAULT_BCRYPT_ROUNDS
+}
+
+module.exports = { passwordProblem, bcryptRounds, MIN_PASSWORD_LENGTH, COMMON_PASSWORDS }

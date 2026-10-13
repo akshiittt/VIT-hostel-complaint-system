@@ -72,6 +72,15 @@ function App() {
     setLoginNotice('')
   }, [])
 
+  // The Logout buttons: tell the server to end the session (it bumps
+  // tokenVersion, so this token stops working everywhere), then clear it
+  // locally. apiRequest reads the token before handleLogout clears it, and a
+  // failed request (offline, already expired) still logs out locally.
+  const logout = useCallback(() => {
+    apiRequest('/api/auth/logout', { method: 'POST' }).catch(() => {})
+    handleLogout()
+  }, [handleLogout])
+
   // A 401 means the token was revoked or expired: log out and say why
   const expireSession = useCallback(() => {
     handleLogout()
@@ -182,7 +191,7 @@ function App() {
         <p role="alert">{sessionError}</p>
         <div className="session-error-actions">
           <button type="button" className="refresh-btn" onClick={restoreSession}>Retry</button>
-          <button type="button" className="link-btn" onClick={handleLogout}>Log out</button>
+          <button type="button" className="link-btn" onClick={logout}>Log out</button>
         </div>
       </div>
     )
@@ -198,7 +207,7 @@ function App() {
         <div className="login-card">
           <ChangePasswordForm forced resetAt={user.passwordResetAt} onChanged={handlePasswordChanged} onSessionExpired={expireSession} />
           <p className="auth-switch">
-            <button type="button" className="link-btn" onClick={handleLogout}>Log out</button>
+            <button type="button" className="link-btn" onClick={logout}>Log out</button>
           </p>
         </div>
       </div>
@@ -218,7 +227,7 @@ function App() {
         onQueryChange={changeWardenQuery}
         onRefresh={loadComplaints}
         updateComplaintStatus={updateComplaintStatus}
-        onLogout={handleLogout}
+        onLogout={logout}
         onSessionExpired={expireSession}
         onPasswordChanged={handlePasswordChanged}
       />
@@ -233,7 +242,7 @@ function App() {
       loadError={loadError}
       addComplaint={addComplaint}
       onRefresh={loadComplaints}
-      onLogout={handleLogout}
+      onLogout={logout}
       onSessionExpired={expireSession}
       onPasswordChanged={handlePasswordChanged}
     />

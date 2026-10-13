@@ -14,6 +14,8 @@ before(async () => {
   process.env.MONGO_URI = mongod.getUri()
   process.env.JWT_SECRET = 'test-secret'
   process.env.LOG_LEVEL = 'silent'
+  // Low cost keeps the suite fast; production always uses the default 12
+  process.env.BCRYPT_ROUNDS = '4'
   delete process.env.VERCEL
   app = require('../app')
   User = require('../models/User')
