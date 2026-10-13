@@ -4,6 +4,8 @@ const mongoose = require('mongoose')
 const connectDB = require('./lib/db')
 const { missingConfig, parseAllowedOrigins } = require('./lib/config')
 const { log, requestLogger } = require('./lib/logger')
+// Logs index-build failures (e.g. a unique index blocked by duplicates)
+require('./lib/indexes')
 
 const app = express()
 
@@ -113,6 +115,10 @@ app.use((err, req, res, next) => {
   if (DB_UNAVAILABLE_ERRORS.has(err.name) || /buffering timed out/.test(err.message || '')) {
     log('db_unavailable', { error: err.name, path: req.originalUrl.split('?')[0] })
     return serviceUnavailable(res)
+  }
+  // Optimistic concurrency: someone saved this document after we loaded it
+  if (err.name === 'VersionError') {
+    return res.status(409).json({ message: 'This complaint was just updated by someone else. Refresh and try again.' })
   }
   // Unique index violation, e.g. two simultaneous sign-ups with one email or
   // one registration number

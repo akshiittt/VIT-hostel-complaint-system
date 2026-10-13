@@ -3,7 +3,7 @@ const User = require('../models/User')
 const { protect, allowRoles } = require('../middleware/auth')
 const { isValidBlock, LIMITS, REG_NUMBER_PATTERN, RATE_LIMITS } = require('../lib/constants')
 const bcrypt = require('bcryptjs')
-const { passwordProblem, bcryptRounds } = require('../lib/passwordPolicy')
+const { passwordProblem, bcryptRounds, hashPassword } = require('../lib/passwordPolicy')
 const { log } = require('../lib/logger')
 const { allowedEmailDomains } = require('../lib/config')
 const { isBlank, tooLongMessage } = require('../lib/validation')
@@ -145,12 +145,13 @@ router.post('/change-password', protect, changePasswordPerUser, async (req, res)
     return res.status(400).json({ message: 'Current password is incorrect' })
   }
 
-  // Plain password on purpose: the pre-save hook hashes it exactly once.
-  // Bumping tokenVersion logs out every other session.
-  user.password = newPassword
-  user.mustChangePassword = false
-  await user.save({ validateModifiedOnly: true })
-  const updated = await bumpTokenVersion(user._id)
+  // One atomic write: the new hash and the tokenVersion bump (which logs out
+  // every other session) land together or not at all
+  const updated = await User.findByIdAndUpdate(
+    user._id,
+    { $set: { password: await hashPassword(newPassword), mustChangePassword: false }, $inc: { tokenVersion: 1 } },
+    { new: true }
+  )
 
   log('password_changed', { userId: String(user._id) })
   res.json({ token: generateToken(updated), user: updated.toPublic() })
@@ -172,12 +173,20 @@ router.post('/reset-password', protect, allowRoles('warden'), resetPerWarden, as
 
   // Never log this value
   const temporaryPassword = generateTemporaryPassword()
-  user.password = temporaryPassword
-  user.mustChangePassword = true
-  user.passwordResetAt = new Date()
-  user.passwordResetBy = req.user._id
-  await user.save({ validateModifiedOnly: true })
-  await bumpTokenVersion(user._id)
+  // One atomic write, so the student's old sessions end exactly when the
+  // temporary password takes effect
+  await User.updateOne(
+    { _id: user._id },
+    {
+      $set: {
+        password: await hashPassword(temporaryPassword),
+        mustChangePassword: true,
+        passwordResetAt: new Date(),
+        passwordResetBy: req.user._id
+      },
+      $inc: { tokenVersion: 1 }
+    }
+  )
 
   log('password_reset', { studentId: String(user._id), wardenId: String(req.user._id) })
   res.json({ email: user.email, temporaryPassword })

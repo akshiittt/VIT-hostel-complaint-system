@@ -23,6 +23,7 @@ cd backend && npm install
 npm run dev      # nodemon, http://localhost:5000
 npm test         # node:test + supertest + in-memory MongoDB, never touches Atlas
 npm run seed     # create the warden, or update its name/password (needs SEED_WARDEN_PASSWORD unless MONGO_URI is localhost)
+npm run db:indexes  # create any missing indexes (non-destructive; DNS_SERVERS=8.8.8.8,1.1.1.1 if local DNS blocks mongodb+srv)
 
 # frontend
 cd vit-hostel && npm install
@@ -44,6 +45,8 @@ npm run build
 - `lib/passwordPolicy.js` → `passwordProblem(pw)`: at least 8 characters, at most 72 bytes, not in the common-password list. Use it for every new password. The seed requires 12+ for the warden.
 - `trust proxy` is only set when `process.env.VERCEL` is set (Vercel overwrites X-Forwarded-For). Elsewhere the header is client-controlled and must not reach `req.ip`.
 - `requireReady` (config check + DB connect) is mounted per router, not on all of `/api`, so unknown paths stay 404. DB-unreachable errors become 503 + `Retry-After`, both in `requireReady` and in the error handler.
+- Complaints use `optimisticConcurrency`: a `save()` on a document someone else saved since it was loaded throws `VersionError`, which app.js maps to 409. Every status change pushes `{ status, by, at }` onto `statusHistory`.
+- `lib/indexes.js` logs `index_error` when an automatic index build fails and provides `ensureIndexes()` (uses `createIndexes()`). **Never use `syncIndexes()` against production: it drops indexes.** The connection pool is capped at `maxPoolSize: 10` per serverless instance (`lib/db.js`).
 - Complaint creation: `validateComplaint` runs before the `complaintsPerStudent` and `urgentPerStudent` limits (so failed validation doesn't count), then the duplicate check (same student + same description within 10 min → 409).
 - Warden resets set `passwordResetAt`/`passwordResetBy` and emit a `password_reset` log event. `tokenVersion` is bumped with an atomic `$inc` (`bumpTokenVersion`).
 - `lib/rateLimit.js` + `models/RateLimit.js`: a fixed-window limiter whose counts live in MongoDB (with a TTL index), because Vercel instances don't share memory. It's applied to login (per IP+email and per IP) and register (per IP). `app.set('trust proxy', 1)` makes `req.ip` the client IP. Never replace it with an in-memory limiter, and never add a flag to disable it in tests (the tests drop the DB between cases instead).
@@ -56,7 +59,7 @@ npm run build
   - `protect` loads the user and returns 401 if the token is invalid or the user is gone.
   - `allowRoles(...)` returns 403.
 - Roles: `student` (self-register via `/api/auth/register`, which always forces role `student`) and `warden` (created only by `seed.js`).
-- Passwords are hashed **only** in the `User` pre-save hook. Always pass plain passwords to `User.create`/`save`. Hashing beforehand double-hashes and breaks login (this was the bug in the old backend). `password` has `select: false`, so use `.select('+password')` when you need it.
+- Passwords are hashed **only** by `hashPassword()` in `lib/passwordPolicy.js`. The `User` pre-save hook calls it, so always pass plain passwords to `User.create`/`save`, because hashing beforehand double-hashes and breaks login (the old backend's bug). Routes that must change the password and `tokenVersion` in **one atomic write** (change-password, reset-password) call `hashPassword()` and use `findByIdAndUpdate`/`updateOne` with `$set` + `$inc`. `password` has `select: false`, so use `.select('+password')` when you need it.
 - Send users to the client via `user.toPublic()`, never as the raw document.
 - Express 5 forwards rejected promises from async handlers to the error handler in `app.js`, so there's no need for try/catch per route. The error handler logs the error and returns a generic 500 message. Don't leak `error.message` to clients.
 - Validation lives in the route handlers: return `400` with `{ message }` for bad input, `404` for an unknown or invalid id, `409` for a duplicate email.
@@ -177,11 +180,11 @@ Read-only live check: users 2 (1 student, 1 warden), complaints 1. All indexes e
 |---|---|---|---|
 | D1 | Critical | App connects as **atlasAdmin**, so a leaked `MONGO_URI` means full control of the cluster | In Atlas, create user `vithostel-app` with `readWrite@vithostel` → put its URI in Vercel `MONGO_URI` → redeploy → `/api/health` ok → only then remove admin rights from (or delete) the old user. Keep an admin user only for yourself, never in the app. |
 | D2 | High | **No backups**: Atlas M0 has no automated snapshots | Before any schema or index change, and on a schedule (e.g. weekly), run `mongodump --uri <readonly-user-uri> --db vithostel`, keep it encrypted outside Dropbox, and test `mongorestore --nsFrom vithostel.* --nsTo restoretest.*` into a scratch database. Consider an Atlas Flex/M10 tier for automatic snapshots. |
-| D3 | High | Connection pool: Mongoose defaults to `maxPoolSize` 100 per serverless instance, against M0's ~500-connection cap | `lib/db.js` connect options `{ maxPoolSize: 10, minPoolSize: 0, maxIdleTimeMS: 60000 }`. Code-only, no data change. |
-| D4 | Medium | Stat-box counts (`status: 'Completed'`, `status ≠ 'Completed'`) do a **full collection scan** on every warden page load (confirmed with explain) | Add a `{ status: 1, urgent: -1, createdAt: -1 }` index. It's tiny today, so building it is instant. |
-| D5 | Medium | Indexes are built implicitly by Mongoose `autoIndex` at cold start, and failures are silent | Set `autoIndex: false` in production and add an explicit `npm run db:indexes` script using **`createIndexes()` (non-destructive)**. **Never `syncIndexes()` against production: it drops indexes not in the schema.** |
-| D6 | Medium | Password change/reset does `save()` and then `$inc tokenVersion` as two writes, so a crash in between changes the password without revoking sessions | Hash in the route and do one `updateOne({ $set: { password, mustChangePassword }, $inc: { tokenVersion: 1 } })`. Code-only. |
-| D7 | Medium | Concurrent status updates are last-write-wins, with no record of which warden changed what | Add `statusHistory: [{ status, by, at }]` (defaults to `[]`, so old docs stay valid) and `optimisticConcurrency: true` on Complaint (version conflict → 409). Additive; no backfill needed. |
+| D3 ✅ done | High | Connection pool: Mongoose defaults to `maxPoolSize` 100 per serverless instance, against M0's ~500-connection cap | `lib/db.js` connect options `{ maxPoolSize: 10, minPoolSize: 0, maxIdleTimeMS: 60000 }`. Code-only, no data change. |
+| D4 ✅ done | Medium | Stat-box counts (`status: 'Completed'`, `status ≠ 'Completed'`) do a **full collection scan** on every warden page load (confirmed with explain) | Add a `{ status: 1, urgent: -1, createdAt: -1 }` index. It's tiny today, so building it is instant. |
+| D5 ✅ done (kept autoIndex, failures now logged, plus `npm run db:indexes`) | Medium | Indexes are built implicitly by Mongoose `autoIndex` at cold start, and failures are silent | Set `autoIndex: false` in production and add an explicit `npm run db:indexes` script using **`createIndexes()` (non-destructive)**. **Never `syncIndexes()` against production: it drops indexes not in the schema.** |
+| D6 ✅ done | Medium | Password change/reset does `save()` and then `$inc tokenVersion` as two writes, so a crash in between changes the password without revoking sessions | Hash in the route and do one `updateOne({ $set: { password, mustChangePassword }, $inc: { tokenVersion: 1 } })`. Code-only. |
+| D7 ✅ done | Medium | Concurrent status updates are last-write-wins, with no record of which warden changed what | Add `statusHistory: [{ status, by, at }]` (defaults to `[]`, so old docs stay valid) and `optimisticConcurrency: true` on Complaint (version conflict → 409). Additive; no backfill needed. |
 | D8 | Low | Duplicate-complaint check can race; deep pages use `skip`; `/mine` silently caps at 100; `name`/`reg` copied into complaints go stale if a profile ever changes; no account-deletion or retention policy; email format only checked in routes | Address when needed. A deletion feature must decide what happens to complaints (anonymise rather than cascade-delete). |
 
 **Migration and data-loss rules:**

@@ -17,7 +17,15 @@ async function connectDB() {
 
   if (!cached.promise) {
     cached.promise = mongoose
-      .connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000 })
+      .connect(process.env.MONGO_URI, {
+        serverSelectionTimeoutMS: 5000,
+        // Each serverless instance gets its own pool; Mongoose's default of
+        // 100 per instance can exhaust the Atlas free tier's ~500 connections
+        // under load. Idle connections close after a minute.
+        maxPoolSize: 10,
+        minPoolSize: 0,
+        maxIdleTimeMS: 60000
+      })
       .catch((error) => {
         // Allow the next request to retry instead of reusing a failed promise
         cached.promise = null

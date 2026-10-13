@@ -1,3 +1,4 @@
+const bcrypt = require('bcryptjs')
 const { LIMITS } = require('./constants')
 
 const MIN_PASSWORD_LENGTH = 8
@@ -37,4 +38,10 @@ function bcryptRounds() {
   return Number.isInteger(rounds) && rounds >= 4 && rounds <= 15 ? rounds : DEFAULT_BCRYPT_ROUNDS
 }
 
-module.exports = { passwordProblem, bcryptRounds, MIN_PASSWORD_LENGTH, COMMON_PASSWORDS }
+// The single place passwords are hashed: used by the User pre-save hook and by
+// routes that update the password atomically together with tokenVersion.
+function hashPassword(password) {
+  return bcrypt.hash(password, bcryptRounds())
+}
+
+module.exports = { passwordProblem, bcryptRounds, hashPassword, MIN_PASSWORD_LENGTH, COMMON_PASSWORDS }

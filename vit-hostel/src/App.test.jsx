@@ -478,3 +478,34 @@ describe('App logout', () => {
     expect(localStorage.getItem(TOKEN_KEY)).toBeNull()
   })
 })
+
+describe('App concurrent status changes', () => {
+  it('shows the conflict message and reloads the list when another warden changed it first', async () => {
+    localStorage.setItem(TOKEN_KEY, 'warden-token')
+    const wardenUser = { _id: 'w1', name: 'Warden', email: 'warden@vit.ac.in', role: 'warden', mustChangePassword: false }
+    const complaint = {
+      _id: 'c1', name: 'Asha Rao', reg: '23BCE1234', hostelType: "Men's Hostel", block: 'C', room: '204',
+      complaintType: 'Water Issue', description: 'Tap is leaking', urgent: false, status: 'Pending',
+      createdAt: '2026-10-01T10:00:00.000Z'
+    }
+    let listCalls = 0
+    const fetchMock = vi.fn(routeFetch({
+      'GET /api/auth/me': [200, wardenUser],
+      'GET /api/complaints': () => {
+        listCalls++
+        const current = listCalls === 1 ? complaint : { ...complaint, status: 'Completed' }
+        return [200, { complaints: [current], page: 1, limit: 20, total: 1, pages: 1, counts: { total: 1, open: listCalls === 1 ? 1 : 0, completed: listCalls === 1 ? 0 : 1 } }]
+      },
+      'PATCH /api/complaints/c1': [409, { message: 'This complaint was just updated by someone else. Refresh and try again.' }]
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(await screen.findByRole('button', { name: 'Mark In Progress' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('This complaint was just updated by someone else.')
+    await waitFor(() => expect(listCalls).toBe(2))
+    expect(await screen.findByRole('button', { name: 'Mark as Completed' })).toBeDisabled()
+  })
+})

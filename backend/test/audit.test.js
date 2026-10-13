@@ -352,3 +352,147 @@ test('L4: an older, cheaper hash is upgraded on the next successful login', asyn
     process.env.BCRYPT_ROUNDS = '4'
   }
 })
+
+// --- Database audit fixes (D3–D7) ---
+
+test('D3: the connection pool is capped for serverless', () => {
+  const options = mongoose.connection.getClient().options
+  assert.equal(options.maxPoolSize, 10)
+  assert.equal(options.minPoolSize, 0)
+  assert.equal(options.maxIdleTimeMS, 60000)
+})
+
+test('D4: status counts and filtered warden lists use an index, not a collection scan', async () => {
+  const stages = (plan) => JSON.stringify(plan.queryPlanner.winningPlan)
+  const count = await Complaint.collection.find({ status: 'Completed' }).explain('queryPlanner')
+  assert.ok(!stages(count).includes('COLLSCAN'), stages(count))
+  assert.ok(stages(count).includes('status_1_urgent_-1_createdAt_-1'))
+  const open = await Complaint.collection.find({ status: { $ne: 'Completed' } }).explain('queryPlanner')
+  assert.ok(!stages(open).includes('COLLSCAN'), stages(open))
+})
+
+test('D5: ensureIndexes creates missing indexes and never drops extra ones', async () => {
+  const { ensureIndexes } = require('../lib/indexes')
+  await Complaint.collection.dropIndex('status_1_urgent_-1_createdAt_-1')
+  await Complaint.collection.createIndex({ room: 1 }, { name: 'manual_room_index' })
+
+  const report = await ensureIndexes()
+  assert.deepEqual(report.errors, [])
+
+  const names = (await Complaint.collection.indexes()).map((i) => i.name)
+  assert.ok(names.includes('status_1_urgent_-1_createdAt_-1'), 'missing index recreated')
+  assert.ok(names.includes('manual_room_index'), 'extra index left alone')
+})
+
+test('D5: an index that cannot be built is reported, not silently ignored', async () => {
+  const { ensureIndexes } = require('../lib/indexes')
+  await User.collection.dropIndex('regNumber_1')
+  await User.collection.insertMany([
+    { name: 'A', email: 'a@example.com', password: 'x', role: 'student', regNumber: '23BCE1111', tokenVersion: 0 },
+    { name: 'B', email: 'b@example.com', password: 'x', role: 'student', regNumber: '23BCE1111', tokenVersion: 0 }
+  ])
+  const lines = []
+  const original = console.log
+  process.env.LOG_LEVEL = 'info'
+  console.log = (line) => lines.push(String(line))
+  let report
+  try {
+    report = await ensureIndexes()
+  } finally {
+    console.log = original
+    process.env.LOG_LEVEL = 'silent'
+  }
+  assert.equal(report.errors.length, 1)
+  assert.equal(report.errors[0].model, 'User')
+  assert.ok(lines.some((l) => JSON.parse(l).event === 'index_error'), 'index failure logged')
+  assert.equal(await User.countDocuments(), 2, 'no data was deleted to make the index fit')
+})
+
+test('D6: changing a password is one atomic write (no save + separate $inc)', async () => {
+  const s = await registerStudent()
+  const saveSpy = User.prototype.save
+  let saves = 0
+  User.prototype.save = function (...args) { saves++; return saveSpy.apply(this, args) }
+  let res
+  try {
+    res = await request(app).post('/api/auth/change-password').set(bearer(s.token))
+      .send({ currentPassword: student.password, newPassword: 'atomic-change-9' })
+  } finally {
+    User.prototype.save = saveSpy
+  }
+  assert.equal(res.status, 200)
+  assert.equal(saves, 0, 'no document save, so password and tokenVersion change together')
+  const stored = await User.findById(s.user._id).select('+password').lean()
+  assert.equal(stored.tokenVersion, 1)
+  assert.equal(Number(stored.password.split('$')[2]), require('../lib/passwordPolicy').bcryptRounds())
+  assert.equal((await request(app).post('/api/auth/login').send({ email: student.email, password: 'atomic-change-9' })).status, 200)
+  assert.equal((await request(app).get('/api/auth/me').set(bearer(s.token))).status, 401)
+})
+
+test('D6: a warden reset is one atomic write too', async () => {
+  const s = await registerStudent()
+  const w = await createWarden()
+  const saveSpy = User.prototype.save
+  let saves = 0
+  User.prototype.save = function (...args) { saves++; return saveSpy.apply(this, args) }
+  let reset
+  try {
+    reset = await request(app).post('/api/auth/reset-password').set(bearer(w.token)).send({ email: student.email })
+  } finally {
+    User.prototype.save = saveSpy
+  }
+  assert.equal(reset.status, 200)
+  assert.equal(saves, 0)
+  const stored = await User.findById(s.user._id).lean()
+  assert.equal(stored.tokenVersion, 1)
+  assert.equal(stored.mustChangePassword, true)
+  assert.equal(String(stored.passwordResetBy), String(w.user._id))
+  assert.equal((await request(app).post('/api/auth/login').send({ email: student.email, password: reset.body.temporaryPassword })).status, 200)
+})
+
+test('D7: status changes are recorded with who and when', async () => {
+  const s = await registerStudent()
+  const w = await createWarden()
+  const created = await request(app).post('/api/complaints').set(bearer(s.token)).send(complaint)
+  const id = created.body._id
+  await request(app).patch(`/api/complaints/${id}`).set(bearer(w.token)).send({ status: 'In Progress' })
+  const done = await request(app).patch(`/api/complaints/${id}`).set(bearer(w.token)).send({ status: 'Completed' })
+  assert.equal(done.status, 200)
+  const history = done.body.statusHistory
+  assert.deepEqual(history.map((h) => h.status), ['In Progress', 'Completed'])
+  assert.equal(String(history[1].by), String(w.user._id))
+  assert.ok(!Number.isNaN(Date.parse(history[1].at)))
+})
+
+test('D7: concurrent status changes never silently overwrite each other', async () => {
+  const s = await registerStudent()
+  const w = await createWarden()
+  const created = await request(app).post('/api/complaints').set(bearer(s.token)).send(complaint)
+  const id = created.body._id
+  const statuses = ['In Progress', 'Completed', 'Pending', 'Completed', 'In Progress']
+  const results = await Promise.all(statuses.map((status) =>
+    request(app).patch(`/api/complaints/${id}`).set(bearer(w.token)).send({ status })
+  ))
+  const codes = results.map((r) => r.status)
+  assert.ok(codes.every((c) => c === 200 || c === 409), JSON.stringify(codes))
+  assert.ok(codes.includes(200))
+  for (const r of results.filter((r) => r.status === 409)) {
+    assert.equal(r.body.message, 'This complaint was just updated by someone else. Refresh and try again.')
+  }
+  const stored = await Complaint.findById(id).lean()
+  assert.equal(stored.statusHistory.length, codes.filter((c) => c === 200).length, 'every accepted change is in the history')
+  assert.equal(stored.status, stored.statusHistory.at(-1).status, 'current status matches the last recorded change')
+})
+
+test('D7: complaints created before statusHistory existed can still be updated', async () => {
+  const s = await registerStudent()
+  const w = await createWarden()
+  const { insertedId } = await Complaint.collection.insertOne({
+    studentId: new mongoose.Types.ObjectId(s.user._id), name: 'Old', reg: '23BCE1234', hostelType: "Men's Hostel", block: 'A',
+    room: '101', complaintType: 'Others', description: 'legacy doc', urgent: false, status: 'Pending',
+    resolvedAt: null, createdAt: new Date(), updatedAt: new Date(), __v: 0
+  })
+  const res = await request(app).patch(`/api/complaints/${insertedId}`).set(bearer(w.token)).send({ status: 'Completed' })
+  assert.equal(res.status, 200)
+  assert.equal(res.body.statusHistory.length, 1)
+})

@@ -141,6 +141,7 @@ router.patch('/:id', protect, requirePasswordChanged, allowRoles('warden'), asyn
     complaint.resolvedAt = new Date()
   }
   complaint.status = status
+  complaint.statusHistory.push({ status, by: req.user._id, at: new Date() })
   // Only validate status/resolvedAt so older complaints that predate newer
   // length limits can still be updated
   await complaint.save({ validateModifiedOnly: true })

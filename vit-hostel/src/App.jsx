@@ -173,6 +173,8 @@ function App() {
     } catch (error) {
       if (error.status === 401) return expireSession()
       setActionError(error.message)
+      // 409: another warden changed it first; show them the current state
+      if (error.status === 409) await loadComplaints()
       return
     } finally {
       setUpdatingIds((ids) => ids.filter((x) => x !== id))

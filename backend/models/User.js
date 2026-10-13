@@ -1,7 +1,7 @@
 const mongoose = require('mongoose')
 const bcrypt = require('bcryptjs')
 const { LIMITS } = require('../lib/constants')
-const { bcryptRounds } = require('../lib/passwordPolicy')
+const { hashPassword } = require('../lib/passwordPolicy')
 
 const userSchema = new mongoose.Schema({
   name: {
@@ -78,12 +78,13 @@ const userSchema = new mongoose.Schema({
 // regNumber '', don't collide.
 userSchema.index({ regNumber: 1 }, { unique: true, partialFilterExpression: { role: 'student' } })
 
-// The only place passwords get hashed. Callers (routes, seed.js) must pass
-// the plain password, otherwise it would be hashed twice and login would fail.
+// Hashes a plain password set on the document before saving. Callers using
+// save()/create() (register, seed, login re-hash) must pass the plain password,
+// otherwise it would be hashed twice. Routes that write with updateOne/
+// findByIdAndUpdate bypass this hook and call hashPassword() themselves.
 userSchema.pre('save', async function () {
   if (!this.isModified('password')) return
-  const salt = await bcrypt.genSalt(bcryptRounds())
-  this.password = await bcrypt.hash(this.password, salt)
+  this.password = await hashPassword(this.password)
 })
 
 userSchema.methods.matchPassword = function (enteredPassword) {

@@ -87,6 +87,17 @@ npm run seed
 - **Forgotten passwords:** there's no email reset yet. The warden uses "Reset a student's password" in the warden panel and gives the student the temporary password privately. To change the warden's own password, use "Change password" in the app, or re-run `npm run seed`.
 - **Missing config:** if `MONGO_URI` or `JWT_SECRET` is missing, every `/api` call returns 500 "Server is not configured correctly", and `/api/health` returns 503 with the names of the missing variables. Check `/api/health` first whenever something looks broken after a deploy.
 
+## Database maintenance
+
+- Indexes are created automatically the first time the API uses each collection. A failure (e.g. a unique index blocked by duplicates) shows up as an `index_error` line in Vercel → Logs.
+- To create missing indexes explicitly, run this from `backend/`:
+  ```bash
+  npm run db:indexes
+  ```
+  It only **adds** indexes and never drops indexes or data. If your network's DNS blocks `mongodb+srv` lookups, prefix it with `DNS_SERVERS=8.8.8.8,1.1.1.1`.
+- **Backups:** the free Atlas tier has no automatic snapshots, so take one with `mongodump` before any schema change (see CLAUDE.md → database audit, D2).
+- Complaints keep a `statusHistory` (status, warden, time). Two wardens changing the same complaint at once: the second gets a 409 and sees the refreshed list.
+
 ## Running locally
 
 ```bash

@@ -157,6 +157,19 @@ Backend tests 90/90, frontend 53/53. `npm audit` (all dependencies, including de
 - [ ] **L2** Drop any leftover `test` database in Atlas.
 - [ ] **L3** Turn off GitHub Pages / delete the `gh-pages` branch.
 
+## Database audit (2026-10-13, sixth pass)
+
+Backend tests 99/99 (3 consecutive runs), frontend 54/54. Production was inspected read-only (counts and index names only): all indexes exist, there are no duplicates, no orphaned complaints, and no leftover `test` database.
+
+- [x] **D3** Connection pool capped (`maxPoolSize` 10, idle connections closed after 60 s).
+- [x] **D4** `{ status, urgent, createdAt }` index: the stat counts and filtered lists no longer scan the whole collection.
+- [x] **D5** Index-build failures are logged (`index_error`); `npm run db:indexes` creates missing indexes without dropping anything.
+- [x] **D6** Password change and reset are single atomic writes (hash + `tokenVersion` together).
+- [x] **D7** `statusHistory` (who/when) and optimistic concurrency (a conflicting update → 409; the UI shows it and reloads).
+- [ ] **D1** (owner) Replace the `atlasAdmin` app user with `readWrite@vithostel`.
+- [ ] **D2** (owner) Backups: `mongodump` schedule and a test restore.
+- [ ] **D8** (low) Duplicate-check race, deep-page `skip`, `/mine` cap indicator, retention/deletion policy.
+
 ## Accepted decisions (not fixing now)
 
 - **JWT in localStorage, 7-day expiry, no server-side revocation.** Acceptable because there are no XSS sinks (React escaping, no `dangerouslySetInnerHTML`). httpOnly cookies would need SameSite/CSRF handling across two Vercel domains. Revisit if an admin role is added in phase 2.
