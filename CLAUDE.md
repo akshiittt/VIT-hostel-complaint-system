@@ -118,7 +118,7 @@ All errors are JSON `{ message }`.
 
 **Docs:** `docs/TESTING.md` (how to test, regression map, gaps), `docs/PROJECT_REVIEW.md` (scored review, blockers, interview prep).
 
-**Live:** frontend https://vit-hostel-complaint-system-bqsl.vercel.app, API https://vit-hostel-complaint-system.vercel.app (`/api/health` → `{"status":"ok","db":"ok"}`). Atlas database `vithostel`. Vercel deploys `main`; work happens on `vercel-backend` and is fast-forwarded into `main`. Backend tests 90/90, frontend 53/53, CI green, `npm audit` 0/0.
+**Live:** frontend **https://vithostelc.vercel.app** (public URL; the old `vit-hostel-complaint-system-bqsl.vercel.app` still works), API https://vit-hostel-complaint-system.vercel.app (`/api/health` → `{"status":"ok","db":"ok"}`). Atlas database `vithostel`. Vercel deploys `main`; work happens on `vercel-backend` and is fast-forwarded into `main`. Backend tests 90/90, frontend 53/53, CI green, `npm audit` 0/0.
 
 ### Done
 

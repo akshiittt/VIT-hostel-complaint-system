@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       API: https://vit-hostel-complaint-system.vercel.app
-      SITE: https://vit-hostel-complaint-system-bqsl.vercel.app
+      SITE: https://vithostelc.vercel.app
     steps:
       - name: API health (database reachable)
         run: |

@@ -1,5 +1,7 @@
 # VIT Hostel Complaint and Request System
 
+**Live: https://vithostelc.vercel.app**
+
 A web app where VIT hostel students report problems (electricity, water, WiFi, room change and more) and wardens track and resolve them.
 
 - **Review 1:** HTML/CSS/JS prototype (the root `index.html`, `student.html`, `warden.html`, `script.js`, `style.css`)

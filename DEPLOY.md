@@ -186,7 +186,7 @@ Run these from any machine (Git Bash, macOS or Linux; on Windows PowerShell use 
 
 ```bash
 API=https://vit-hostel-complaint-system.vercel.app
-FE=https://vit-hostel-complaint-system-bqsl.vercel.app
+FE=https://vithostelc.vercel.app
 
 # 1. API latency: run 5 times. Ignore the first (it may be a cold start).
 #    Before the region pin: 0.5–0.9 s warm. Expect roughly 0.1–0.2 s from India.
@@ -207,6 +207,13 @@ curl -sI $FE/favicon.jpg | grep -iE "cache-control|content-length"
 ```
 
 Then log in on the live site and check the browser console for errors.
+
+## Public URL / custom domain
+
+- The public site is **https://vithostelc.vercel.app** (frontend project → Settings → Domains). Share only this address.
+- **Every address users open the site on must be listed in the API's `ALLOWED_ORIGINS`**, or the browser blocks API calls and the app shows "Cannot reach the server". Current value: `https://vithostelc.vercel.app,https://vit-hostel-complaint-system-bqsl.vercel.app,http://localhost:5173`.
+- Deployment-specific URLs (`…-<hash>-akshit15.vercel.app`, opened by Vercel's "Visit" button) aren't allowed on purpose. Use the public URL.
+- **To change the domain:** add the new one under Domains → add it to `ALLOWED_ORIGINS` → redeploy the API → update `SITE` in `.github/workflows/post-deploy.yml`. The API URL (`VITE_API_URL`, CSP `connect-src`) doesn't change.
 
 ## Continuous deployment
 
