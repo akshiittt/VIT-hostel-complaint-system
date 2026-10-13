@@ -220,7 +220,7 @@ Then log in on the live site and check the browser console for errors.
 - **Deploys:** Vercel deploys `main` automatically for both projects. Other branches get preview URLs.
 - **Before deploys:** CI (`.github/workflows/ci.yml`) runs on every push and PR.
 - **After deploys:** `.github/workflows/post-deploy.yml` runs after every successful **production** deploy and checks, read-only, that `/api/health` is ok, the frontend returns 200 with a CSP, and `/api/auth/me` answers 401. A red run there means roll back (see Rollback).
-- **Gate deploys on CI (recommended, owner setting):** GitHub → Settings → Branches → add a rule for `main`: require a pull request and require the `backend`, `frontend` and `journeys` checks. Then work on a branch, open a PR, wait for green CI, and merge; the merge deploys.
+- **Branch protection on `main` (enabled 2026-10-14):** pull requests require the `backend`, `frontend` and `journeys` checks, with no approvals needed. **The owner can bypass it** (a deliberate choice for a solo project), so a direct push to `main` still deploys without waiting for CI. Normal flow: push to a branch → open a PR → green checks → merge → Vercel deploys → post-deploy smoke check.
 
 ## Running locally
 
