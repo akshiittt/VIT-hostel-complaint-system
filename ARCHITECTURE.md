@@ -199,11 +199,6 @@ Each app has its own folder and `package.json`. `cd` into the folder, run `npm i
   - Logout ends sessions on every device.
 
 ## 8. Next steps
-
-**Before presenting**
-- Add screenshots and a short demo video to the README; recruiters spend about 30 seconds on a repo.
-- Prepare demo accounts (one student, one warden) and a few sample complaints.
-- Try the site on a real Android phone and iPhone.
 - Read `version-1/ai-docs/PROJECT_REVIEW.md` and practise its interview questions.
 
 **If the college adopts it**
