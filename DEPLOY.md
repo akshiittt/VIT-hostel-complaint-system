@@ -11,10 +11,8 @@ Data lives in MongoDB Atlas (free tier).
 
 ## 1. Create the database (MongoDB Atlas)
 
-The old cluster (`vithostel.qouumxh.mongodb.net`) no longer exists, so make a new one.
-
 1. Go to <https://cloud.mongodb.com>, then **Create** a cluster. Pick the **free (M0)** tier and a region near your users, such as Mumbai. The API's Vercel region (`regions` in `backend/vercel.json`, currently `bom1` Mumbai) should match it.
-2. **Database Access → Add New Database User.** Choose username + password, role "Read and write to any database".
+2. **Database Access → Add New Database User.** Use an app-only user (e.g. `vithostel-app`) with **Autogenerate Secure Password**, and under *Database User Privileges* → **Add Specific Privilege**: role `readWrite`, database `vithostel`. Don't give the app an admin role: a leaked connection string would then control the whole cluster.
 3. **Network Access → Add IP Address → Allow access from anywhere (`0.0.0.0/0`).** This is needed because Vercel's IPs change.
 4. **Connect → Drivers.** Copy the connection string and put your password in it. Then add the database name `vithostel` after `.net/`:
    ```
@@ -97,7 +95,7 @@ npm run seed
   npm run db:indexes
   ```
   It only **adds** indexes and never drops indexes or data. If your network's DNS blocks `mongodb+srv` lookups, prefix it with `DNS_SERVERS=8.8.8.8,1.1.1.1`.
-- **Backups:** none, by decision (2026-10-13). The free Atlas tier has no automatic snapshots, so deleted or corrupted data can't be recovered. Be extra careful with any command that writes to production. Revisit in a future update (see CLAUDE.md → D2).
+- **Backups:** none, by decision (2026-10-13). The free Atlas tier has no automatic snapshots, so deleted or corrupted data can't be recovered. Be extra careful with any command that writes to production. Revisit in a future update (see `version-1/ai-docs/CLAUDE.md` → D2).
 - Complaints keep a `statusHistory` (status, warden, time). Two wardens changing the same complaint at once: the second gets a 409 and sees the refreshed list.
 
 ## Release checklist
@@ -111,7 +109,7 @@ Go through this before promoting anything to production (that is, before pushing
 - [ ] CI is green on the commit you're shipping (GitHub → Actions).
 - [ ] Every environment variable the change needs exists in **both** Vercel projects' Production environment (see [Environment variables](#environment-variables)). New or changed variables only take effect after a redeploy.
 - [ ] If the API URL changed: update `VITE_API_URL` in the frontend project **and** `connect-src` in `vit-hostel/vercel.json`. If the frontend URL changed: update `ALLOWED_ORIGINS` in the API project.
-- [ ] Any schema change is additive only (new optional fields with defaults, new indexes). See the migration rules in CLAUDE.md.
+- [ ] Any schema change is additive only (new optional fields with defaults, new indexes). See the migration rules in `version-1/ai-docs/CLAUDE.md`.
 
 **Deploy order**
 

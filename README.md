@@ -4,7 +4,7 @@
 
 A web app where VIT hostel students report problems (electricity, water, WiFi, room change and more) and wardens track and resolve them.
 
-- **Review 1:** HTML/CSS/JS prototype (the root `index.html`, `student.html`, `warden.html`, `script.js`, `style.css`)
+- **Review 1:** HTML/CSS/JS prototype, archived in [`version-1/legacy-html/`](version-1/legacy-html/)
 - **Review 2:** React frontend
 - **Now:** React + Express/MongoDB full-stack app, deployable on Vercel
 
@@ -59,8 +59,10 @@ See [DEPLOY.md](DEPLOY.md) for step-by-step MongoDB Atlas + Vercel setup and the
 
 ## Project docs
 
-- [CLAUDE.md](CLAUDE.md): architecture and coding conventions
-- [check.md](check.md): review checklist and its status
+- [ARCHITECTURE.md](ARCHITECTURE.md): **start here**. How it works, every folder and file, commands, workflows, next steps
+- [DEPLOY.md](DEPLOY.md): deployment, environment variables, release checklist, rollback, troubleshooting
+- [docs/TESTING.md](docs/TESTING.md): how the tests work and which test guards which fixed bug
+- [version-1/](version-1/): the original Review 1 HTML version and the AI-generated project docs (Claude instructions, review checklist, scored review and interview prep)
 
 ## Not built yet
 

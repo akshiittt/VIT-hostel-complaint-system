@@ -1,0 +1,2 @@
+- [VIT hostel deployment](vit-hostel-deployment.md) — live URLs, Vercel projects, debugging lessons
+- [Laptop DNS blocks SRV](user-laptop-dns-srv.md) — local mongodb+srv fails; use dns.setServers workaround
