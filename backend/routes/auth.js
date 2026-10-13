@@ -1,18 +1,19 @@
 const express = require('express')
-const jwt = require('jsonwebtoken')
 const User = require('../models/User')
-const { protect } = require('../middleware/auth')
+const { protect, allowRoles } = require('../middleware/auth')
 const { isValidBlock, LIMITS, RATE_LIMITS } = require('../lib/constants')
+const { allowedEmailDomains } = require('../lib/config')
 const { isBlank, tooLongMessage } = require('../lib/validation')
+const { generateToken } = require('../lib/token')
+const { generateTemporaryPassword } = require('../lib/tempPassword')
 const rateLimit = require('../lib/rateLimit')
 
 const router = express.Router()
 
-const generateToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { algorithm: 'HS256', expiresIn: '7d' })
-
 const loginPerIpEmail = rateLimit(RATE_LIMITS.loginPerIpEmail)
 const loginPerIp = rateLimit(RATE_LIMITS.loginPerIp)
 const registerPerIp = rateLimit(RATE_LIMITS.registerPerIp)
+const changePasswordPerUser = rateLimit(RATE_LIMITS.changePasswordPerUser)
 
 router.post('/register', registerPerIp, async (req, res) => {
   const { name, email, password, regNumber, hostelType, block, room } = req.body || {}
@@ -34,6 +35,10 @@ router.post('/register', registerPerIp, async (req, res) => {
   if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
     return res.status(400).json({ message: 'Please enter a valid email address' })
   }
+  const domains = allowedEmailDomains()
+  if (domains.length && !domains.includes(normalizedEmail.slice(normalizedEmail.lastIndexOf('@') + 1))) {
+    return res.status(400).json({ message: `Please use your university email (@${domains.join(' or @')})` })
+  }
   if (password.length < 6) {
     return res.status(400).json({ message: 'Password must be at least 6 characters' })
   }
@@ -42,16 +47,21 @@ router.post('/register', registerPerIp, async (req, res) => {
   }
 
   // Fast path for the common case. Two simultaneous sign-ups can both pass
-  // this check; the unique index then rejects one and app.js turns it into 409.
+  // these checks; the unique indexes then reject one and app.js turns it into 409.
   const exists = await User.exists({ email: normalizedEmail })
   if (exists) {
     return res.status(409).json({ message: 'An account with this email already exists' })
+  }
+  // Same normalisation as the schema (trim + uppercase)
+  const regTaken = await User.exists({ role: 'student', regNumber: regNumber.trim().toUpperCase() })
+  if (regTaken) {
+    return res.status(409).json({ message: 'This registration number is already registered' })
   }
 
   // Role is always student here; warden accounts are only created by seed.js
   const user = await User.create({ name, email: normalizedEmail, password, role: 'student', regNumber, hostelType, block, room })
 
-  res.status(201).json({ token: generateToken(user._id), user: user.toPublic() })
+  res.status(201).json({ token: generateToken(user), user: user.toPublic() })
 })
 
 router.post('/login', loginPerIpEmail, loginPerIp, async (req, res) => {
@@ -73,11 +83,69 @@ router.post('/login', loginPerIpEmail, loginPerIp, async (req, res) => {
     return res.status(401).json({ message: 'Invalid email or password' })
   }
 
-  res.json({ token: generateToken(user._id), user: user.toPublic() })
+  res.json({ token: generateToken(user), user: user.toPublic() })
 })
 
 router.get('/me', protect, (req, res) => {
   res.json(req.user.toPublic())
+})
+
+// Any logged-in user changes their own password. A wrong current password is
+// 400, not 401, so the frontend doesn't treat it as an expired session.
+router.post('/change-password', protect, changePasswordPerUser, async (req, res) => {
+  const { currentPassword, newPassword } = req.body || {}
+
+  if (isBlank(currentPassword) || isBlank(newPassword)) {
+    return res.status(400).json({ message: 'Please fill in all required fields' })
+  }
+  if (newPassword.length < 6) {
+    return res.status(400).json({ message: 'Password must be at least 6 characters' })
+  }
+  const tooLong = tooLongMessage([['Password', newPassword, LIMITS.password, { bytes: true }]])
+  if (tooLong) {
+    return res.status(400).json({ message: tooLong })
+  }
+  if (newPassword === currentPassword) {
+    return res.status(400).json({ message: 'New password must be different from the current one' })
+  }
+
+  const user = await User.findById(req.user._id).select('+password')
+  if (!user || !(await user.matchPassword(currentPassword))) {
+    return res.status(400).json({ message: 'Current password is incorrect' })
+  }
+
+  // Plain password on purpose: the pre-save hook hashes it exactly once.
+  // Bumping tokenVersion logs out every other session.
+  user.password = newPassword
+  user.mustChangePassword = false
+  user.tokenVersion += 1
+  await user.save({ validateModifiedOnly: true })
+
+  res.json({ token: generateToken(user), user: user.toPublic() })
+})
+
+// A warden gives a student who forgot their password a temporary one. The
+// student must change it after logging in. Wardens can't reset other wardens.
+router.post('/reset-password', protect, allowRoles('warden'), async (req, res) => {
+  const { email } = req.body || {}
+
+  if (isBlank(email)) {
+    return res.status(400).json({ message: "Please enter the student's email" })
+  }
+
+  const user = await User.findOne({ email: email.trim().toLowerCase() })
+  if (!user || user.role !== 'student') {
+    return res.status(404).json({ message: 'No student account with that email' })
+  }
+
+  // Never log this value
+  const temporaryPassword = generateTemporaryPassword()
+  user.password = temporaryPassword
+  user.mustChangePassword = true
+  user.tokenVersion += 1
+  await user.save({ validateModifiedOnly: true })
+
+  res.json({ email: user.email, temporaryPassword })
 })
 
 module.exports = router

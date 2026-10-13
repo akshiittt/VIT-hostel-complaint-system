@@ -658,3 +658,95 @@ textarea:focus-visible,
   outline: 2px solid #4a90e2;
   outline-offset: 2px;
 }
+
+/* ---------- Status workflow, paging, passwords ---------- */
+.btn-progress {
+  padding: 7px 14px;
+  background: #3b82c4;
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.2s;
+}
+
+.btn-progress:hover {
+  opacity: 0.85;
+}
+
+.badge-status-progress {
+  background: #e3effb;
+  color: #2f6fb0;
+}
+
+.btn-secondary {
+  flex: 1;
+  background: #eef2f7;
+  color: #555;
+}
+
+.account-section {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 28px 0;
+}
+
+.account-card {
+  max-width: 480px;
+}
+
+.warden-section {
+  margin-bottom: 20px;
+}
+
+.warden-filter {
+  margin-bottom: 16px;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin: 6px 0 24px;
+  font-size: 13px;
+  color: #555;
+}
+
+.pagination .refresh-btn {
+  margin-left: 0;
+}
+
+.reset-result {
+  font-size: 13px;
+  color: #2c3e50;
+  background: #e9f7ef;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  overflow-wrap: anywhere;
+}
+
+.reset-result code {
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 14px;
+  font-weight: 700;
+  background: #fff;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.reset-note {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #555;
+}
+
+@media (max-width: 768px) {
+  .account-section {
+    padding: 16px 16px 0;
+  }
+}

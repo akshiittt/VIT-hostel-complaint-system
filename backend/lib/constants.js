@@ -35,6 +35,13 @@ const RATE_LIMITS = {
     windowMs: 60 * 60 * 1000,
     max: 100,
     keyFn: (req) => req.ip
+  },
+  // Applied after protect, so req.user is set
+  changePasswordPerUser: {
+    name: 'change-password',
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    keyFn: (req) => String(req.user._id)
   }
 }
 

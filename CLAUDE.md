@@ -36,12 +36,16 @@ npm run build
   - `server.js` listens (local dev only).
   - `api/index.js` re-exports the app for Vercel, and `vercel.json` rewrites every path to it.
   - Keep this split. Never call `app.listen()` or `process.exit()` from code Vercel loads.
-- `lib/db.js` caches the mongoose connection promise on `global` so warm serverless instances reuse it. Routes under `/api` connect lazily through middleware in `app.js`. `/api/health` and `/` deliberately skip the DB.
+- `lib/db.js` caches the mongoose connection promise on `global` so warm serverless instances reuse it. Routes under `/api` connect lazily through middleware in `app.js`. `/` skips the DB. `/api/health` connects and pings it, with a 5 s timeout.
 - `lib/config.js` → `missingConfig()`. The `/api` middleware returns 500 "Server is not configured correctly" if `MONGO_URI` or `JWT_SECRET` is missing. `/api/health` returns 503 with the missing names (never the values).
 - `lib/constants.js` is the single source for hostel blocks, complaint types, statuses, `LIMITS` (max field lengths) and `RATE_LIMITS`. `vit-hostel/src/constants.js` mirrors the blocks and types, so **change both together**.
 - `lib/validation.js` has `isBlank` (also blocks NoSQL operator injection, because it requires real strings) and `tooLongMessage`. Passwords are measured in UTF-8 bytes against 72, because bcrypt ignores anything longer.
 - `lib/rateLimit.js` + `models/RateLimit.js`: a fixed-window limiter whose counts live in MongoDB (with a TTL index), because Vercel instances don't share memory. It's applied to login (per IP+email and per IP) and register (per IP). `app.set('trust proxy', 1)` makes `req.ip` the client IP. Never replace it with an in-memory limiter, and never add a flag to disable it in tests (the tests drop the DB between cases instead).
-- Auth: JWT signed with `JWT_SECRET`, payload `{ id }`, 7-day expiry. Sent as `Authorization: Bearer <token>`.
+- Auth: JWT (HS256) signed with `JWT_SECRET`, payload `{ id, v }`, 7-day expiry. Sent as `Authorization: Bearer <token>`. Always create tokens with `lib/token.js` → `generateToken(user)`.
+  - `v` is `user.tokenVersion`. `protect` returns 401 "Session expired" when they differ. Changing or resetting a password bumps it, which ends all existing sessions.
+  - `user.mustChangePassword` is set by a warden reset. `requirePasswordChanged` (used on every complaint route) returns 403 until the user changes their password. `/me` and change-password stay open.
+  - Temporary passwords come from `lib/tempPassword.js` (crypto, unambiguous alphabet). Never log them.
+- Sign-up identity: `ALLOWED_EMAIL_DOMAINS` (optional, comma-separated) restricts email domains. `regNumber` is unique among students (a partial unique index plus a route check), and the error handler maps 11000 on regNumber to a 409 with its own message.
   - `protect` loads the user and returns 401 if the token is invalid or the user is gone.
   - `allowRoles(...)` returns 403.
 - Roles: `student` (self-register via `/api/auth/register`, which always forces role `student`) and `warden` (created only by `seed.js`).
@@ -57,14 +61,16 @@ npm run build
 
 | Method | Path | Role |
 |---|---|---|
-| POST | `/api/auth/register` | public: student sign-up → `{ token, user }` |
-| POST | `/api/auth/login` | public → `{ token, user }` |
+| POST | `/api/auth/register` | public: student sign-up → `{ token, user }`. 400 for a disallowed email domain, 409 for a duplicate email or reg number |
+| POST | `/api/auth/login` | public → `{ token, user }` (`user.mustChangePassword`) |
 | GET | `/api/auth/me` | any logged in |
+| POST | `/api/auth/change-password` | any logged in, `{ currentPassword, newPassword }` → `{ token, user }` (new token; bumps tokenVersion) |
+| POST | `/api/auth/reset-password` | warden, `{ email }` → `{ email, temporaryPassword }` (student must change it at next login) |
 | POST | `/api/complaints` | student |
-| GET | `/api/complaints/mine` | student |
-| GET | `/api/complaints` | warden (urgent first, newest first) |
+| GET | `/api/complaints/mine` | student (plain array) |
+| GET | `/api/complaints?status=&page=&limit=` | warden → `{ complaints, page, limit, total, pages, counts: { total, open, completed } }`. `status` is all, open, Pending, In Progress or Completed; `limit` is at most 100 |
 | PATCH | `/api/complaints/:id` | warden, `{ status }` |
-| GET | `/api/health` | public |
+| GET | `/api/health` | public. Pings the DB: 200 `{status:'ok',db:'ok'}`, or 503 when config is missing or the DB is unreachable |
 
 All errors are JSON `{ message }`.
 
@@ -79,7 +85,7 @@ All errors are JSON `{ message }`.
 
 ## Environment variables
 
-- Backend: `MONGO_URI`, `JWT_SECRET`, `ALLOWED_ORIGINS` (comma-separated, used for CORS), `PORT` (local only), `SEED_WARDEN_NAME`/`SEED_WARDEN_EMAIL`/`SEED_WARDEN_PASSWORD` (seed only).
+- Backend: `MONGO_URI`, `JWT_SECRET`, `ALLOWED_ORIGINS` (comma-separated, used for CORS; trailing slash and case are ignored), `ALLOWED_EMAIL_DOMAINS` (optional), `PORT` (local only), `SEED_WARDEN_NAME`/`SEED_WARDEN_EMAIL`/`SEED_WARDEN_PASSWORD` (seed only).
 - Frontend: `VITE_API_URL`. It's baked in at build time, so changing it on Vercel needs a redeploy.
 - Never commit `.env` files. Keep `.env.example` files in sync when adding variables.
 
@@ -87,6 +93,8 @@ All errors are JSON `{ message }`.
 
 - Match the existing style: no semicolons, single quotes, 2-space indent, small focused files.
 - Every backend behavior change gets a test in `backend/test/` that runs against the in-memory DB. Run `npm test` before claiming something works.
+- `backend/test/constantsSync.test.js` fails if `vit-hostel/src/constants.js` (blocks, types, statuses, LIMITS) drifts from `backend/lib/constants.js`.
+- CI: `.github/workflows/ci.yml` runs both test suites and the frontend build on every push and PR.
 - Frontend tests: Vitest + React Testing Library (`cd vit-hostel && npm test`). Stub `fetch`, don't mock `api.js`, and query by label/role.
 - For UI changes, run both dev servers and click through the flow (student sign-up → submit → warden login → change status), and check the browser console for errors.
 

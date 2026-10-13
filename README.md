@@ -1,59 +1,66 @@
 # VIT Hostel Complaint and Request System
 
-A web-based complaint and request portal designed for VIT hostel students and wardens.
+A web app where VIT hostel students report problems (electricity, water, WiFi, room change and more) and wardens track and resolve them.
 
-This project was initially developed as part of **Review 1** using **HTML, CSS, and JavaScript** and is planned to be upgraded using **React in Review 2**.
-
----
+- **Review 1:** HTML/CSS/JS prototype (the root `index.html`, `student.html`, `warden.html`, `script.js`, `style.css`)
+- **Review 2:** React frontend
+- **Now:** React + Express/MongoDB full-stack app, deployable on Vercel
 
 ## Features
 
-### Login / Role Selection
-- Student login
-- Warden login
-- Role-based redirection
+**Students**
+- Sign up with name, registration number, email and password. Registration numbers are unique, and sign-up can be limited to university email domains.
+- Submit complaints with hostel, block, room, type, description and an urgent flag. Blocks are checked against the chosen hostel.
+- See their own complaints and statuses, with a type filter and a refresh button.
+- Change their password.
 
-### Student Dashboard
-- Submit hostel complaints
-- Dynamic hostel type selection
-- Block dropdown based on hostel type
-- Complaint type selection
-- Urgent complaint option
-- Complaint status display
+**Wardens**
+- See every complaint, urgent first, with server-side paging, a status filter, and Open/Completed counts.
+- Mark complaints Pending, In Progress or Completed.
+- Reset a student's password to a one-time temporary password. The student must choose a new one at their next login.
 
-### Warden Panel
-- View all complaints
-- Mark complaints as:
-  - Pending
-  - Completed
+**Security**
+- Passwords are hashed with bcrypt.
+- Login tokens are JWTs that the server can revoke: changing or resetting a password logs that account out everywhere.
+- Every route checks the user's role.
+- Login and sign-up are rate-limited, and the counts are shared across serverless instances.
+- All input is validated, and length limits are enforced on both the client and the server.
 
----
+## Tech stack
 
-## Hostel Logic
+| Part | Tech |
+|---|---|
+| Frontend (`vit-hostel/`) | React 18, Vite 6, plain CSS, Vitest + React Testing Library |
+| Backend (`backend/`) | Node 22, Express 5, Mongoose 8, JWT, bcryptjs, node:test + supertest + mongodb-memory-server |
+| Database | MongoDB Atlas |
+| Hosting | Vercel (two projects from this repo) |
+| CI | GitHub Actions: both test suites and the frontend build on every push and PR |
 
-### Men's Hostel Blocks
-A, B, C, D, E, F, G, H, J, K, L, M, N, P, Q, R, S, T
+## Run locally
 
-### Women's Hostel Blocks
-A, B, C, D, E, F, G, H, J
+```bash
+# backend: copy .env.example to .env and fill in MONGO_URI + JWT_SECRET
+cd backend && npm install && npm run dev        # http://localhost:5000
 
----
+# frontend
+cd vit-hostel && npm install && npm run dev     # http://localhost:5173
 
-## Technologies Used
-- HTML
-- CSS
-- JavaScript
+# create the warden account (needs SEED_WARDEN_PASSWORD unless MONGO_URI is localhost)
+cd backend && npm run seed
+```
 
----
+Tests: run `npm test` inside `backend/` and inside `vit-hostel/`.
 
-## Future Scope
-- React upgrade (Review 2)
-- Backend integration
-- Database support
-- Deployment
+## Deploy
 
----
+See [DEPLOY.md](DEPLOY.md) for step-by-step MongoDB Atlas + Vercel setup and the API reference.
 
-## Project Status
-Review 1 Completed  
-React Upgrade in Progress
+## Project docs
+
+- [CLAUDE.md](CLAUDE.md): architecture and coding conventions
+- [check.md](check.md): review checklist and its status
+
+## Not built yet
+
+- Email verification and email alerts (urgent complaint → wardens, status change → student). These need an email-sending service.
+- Cleaning staff role, cleaning requests and an admin dashboard (phase 2).

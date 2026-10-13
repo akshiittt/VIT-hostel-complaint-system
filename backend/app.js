@@ -1,5 +1,6 @@
 const express = require('express')
 const cors = require('cors')
+const mongoose = require('mongoose')
 const connectDB = require('./lib/db')
 const { missingConfig, parseAllowedOrigins } = require('./lib/config')
 
@@ -18,13 +19,38 @@ app.get('/', (req, res) => {
   res.json({ message: 'VIT Hostel Backend API is running' })
 })
 
-// Reports missing env var names (never values) so a broken deploy is obvious
-app.get('/api/health', (req, res) => {
+const HEALTH_TIMEOUT_MS = 5000
+
+// Rejects after ms so a hanging connection can't hold the request open
+function timeout(ms) {
+  let timer
+  const promise = new Promise((resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(`Health check timed out after ${ms}ms`)), ms)
+  })
+  return { promise, clear: () => clearTimeout(timer) }
+}
+
+// Reports missing env var names (never values) so a broken deploy is obvious,
+// then pings the database. The real DB error is logged, never returned.
+app.get('/api/health', async (req, res) => {
   const missing = missingConfig()
   if (missing.length) {
     return res.status(503).json({ status: 'misconfigured', missing })
   }
-  res.json({ status: 'ok' })
+  const limit = timeout(HEALTH_TIMEOUT_MS)
+  try {
+    const ping = (async () => {
+      await connectDB()
+      await mongoose.connection.db.admin().ping()
+    })()
+    await Promise.race([ping, limit.promise])
+  } catch (error) {
+    console.error('Health check failed:', error)
+    return res.status(503).json({ status: 'error', db: 'unreachable' })
+  } finally {
+    limit.clear()
+  }
+  res.json({ status: 'ok', db: 'ok' })
 })
 
 // Every /api route below needs the database; connect lazily (and reuse the
@@ -49,9 +75,14 @@ app.use((req, res) => {
 
 // Express 5 forwards errors thrown in async handlers here
 app.use((err, req, res, next) => {
-  // Unique index violation, e.g. two simultaneous sign-ups with one email
+  // Unique index violation, e.g. two simultaneous sign-ups with one email or
+  // one registration number
   if (err.code === 11000) {
-    return res.status(409).json({ message: 'An account with this email already exists' })
+    const field = Object.keys(err.keyPattern || err.keyValue || {})[0]
+    const message = field === 'regNumber'
+      ? 'This registration number is already registered'
+      : 'An account with this email already exists'
+    return res.status(409).json({ message })
   }
   // Client errors raised by middleware such as express.json (bad JSON, 413)
   if (err.expose && err.status >= 400 && err.status < 500) {

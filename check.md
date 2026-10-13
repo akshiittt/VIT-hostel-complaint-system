@@ -69,8 +69,8 @@ Tick each box only when it's fixed **and** verified: a test for backend changes,
 
 ## Follow-ups found during the fixes
 
-- [ ] **22. Status-update failures use a blocking `alert()` popup.** Show an on-page `role="alert"` message in the warden panel instead. (`vit-hostel/src/App.jsx` `updateComplaintStatus`)
-- [ ] **23. The frontend doesn't enforce the backend `LIMITS`.** Add `maxLength` (name 100, regNumber 20, room 20, password 72) to the register and complaint inputs, so users see the limit before the server rejects them. (Mirror `LIMITS` in `vit-hostel/src/constants.js`.)
+- [x] **22. Status-update failures use a blocking `alert()` popup.** Show an on-page `role="alert"` message in the warden panel instead. (`vit-hostel/src/App.jsx` `updateComplaintStatus`)
+- [x] **23. The frontend doesn't enforce the backend `LIMITS`.** Add `maxLength` (name 100, regNumber 20, room 20, password 72) to the register and complaint inputs, so users see the limit before the server rejects them. (Mirror `LIMITS` in `vit-hostel/src/constants.js`.)
 - [ ] **24. Advisories in dev-only test tooling.** `npm audit` reports 3 (tinypool, @vitest/mocker). They're not in the production bundle. Fixing them needs Vitest 4+/Vite 7+, so revisit with the next Vite upgrade.
 - [x] WardenPanel load error was missing `role="alert"`. Fixed.
 
@@ -85,6 +85,30 @@ Tick each box only when it's fixed **and** verified: a test for backend changes,
   - [x] The root `node_modules` (549 files) was committed to git. Untracked it and added a root `.gitignore`.
   - [x] Token signing and checking now both use HS256 explicitly.
   - [x] Seed no longer checks the password twice.
+
+## Production-readiness pass (2026-10-13, third pass)
+
+From the full-repo architecture review. Backend tests 66/66, frontend 35/35. Clicked through on an in-memory DB.
+
+- [x] **Identity:** optional `ALLOWED_EMAIL_DOMAINS`, and registration numbers are unique among students (index + 409).
+- [x] **Account recovery:** students and wardens can change their own password, and wardens can reset a student's password to a one-time temporary password. The server blocks complaint routes until the student changes it.
+- [x] **Session revocation:** `tokenVersion` is stored in the JWT, so a password change or reset logs the account out everywhere.
+- [x] **CI:** `.github/workflows/ci.yml` runs both test suites and the frontend build.
+- [x] **Health check** pings the DB (503 when it's unreachable).
+- [x] **Warden list:** server-side paging and status filter, with counts calculated on the server.
+- [x] "In Progress" button and badge; on-page errors instead of `alert()` (#22); `maxLength` on inputs (#23).
+- [x] `vercel.json` pins `"framework": null`, so Vercel always runs `api/index.js`.
+- [x] README rewritten. The unused duplicate image and the unused `user` prop on WardenPanel are removed. A test keeps frontend and backend constants in sync.
+
+**Still needs you:**
+- Atlas cluster, Vercel projects and seeding the warden (DEPLOY.md).
+- Email verification and email alerts (need an email-sending service, e.g. Resend or SendGrid).
+- Monitoring (e.g. Vercel log drains or Sentry).
+- Merging into `main`.
+
+**Open:**
+- [ ] #24: advisories in the dev-only test tools.
+- [ ] Wardens see every hostel. Scope wardens to hostels/blocks if that's how VIT assigns them.
 
 ## Accepted decisions (not fixing now)
 

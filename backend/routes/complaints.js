@@ -1,13 +1,13 @@
 const express = require('express')
 const mongoose = require('mongoose')
 const Complaint = require('../models/Complaint')
-const { protect, allowRoles } = require('../middleware/auth')
+const { protect, allowRoles, requirePasswordChanged } = require('../middleware/auth')
 const { COMPLAINT_TYPES, COMPLAINT_STATUSES, LIMITS, isValidBlock } = require('../lib/constants')
 const { isBlank, tooLongMessage } = require('../lib/validation')
 
 const router = express.Router()
 
-router.post('/', protect, allowRoles('student'), async (req, res) => {
+router.post('/', protect, requirePasswordChanged, allowRoles('student'), async (req, res) => {
   const { hostelType, block, room, complaintType, description, urgent } = req.body || {}
 
   if ([hostelType, block, room, complaintType, description].some(isBlank)) {
@@ -42,17 +42,60 @@ router.post('/', protect, allowRoles('student'), async (req, res) => {
   res.status(201).json(complaint)
 })
 
-router.get('/mine', protect, allowRoles('student'), async (req, res) => {
+router.get('/mine', protect, requirePasswordChanged, allowRoles('student'), async (req, res) => {
   const complaints = await Complaint.find({ studentId: req.user._id }).sort({ createdAt: -1 })
   res.json(complaints)
 })
 
-router.get('/', protect, allowRoles('warden'), async (req, res) => {
-  const complaints = await Complaint.find().sort({ urgent: -1, createdAt: -1 })
-  res.json(complaints)
+// Warden list filters. 'open' means anything not yet Completed.
+const STATUS_FILTERS = {
+  all: {},
+  open: { status: { $ne: 'Completed' } },
+  ...Object.fromEntries(COMPLAINT_STATUSES.map((status) => [status, { status }]))
+}
+const DEFAULT_LIMIT = 20
+const MAX_LIMIT = 100
+// Keeps skip well inside what MongoDB accepts for absurd ?page= values
+const MAX_PAGE = 1000000
+
+// Integer query param, or fallback if missing or not a number
+function intParam(value, fallback) {
+  const n = Number.parseInt(String(value ?? ''), 10)
+  return Number.isFinite(n) ? n : fallback
+}
+
+router.get('/', protect, requirePasswordChanged, allowRoles('warden'), async (req, res) => {
+  const status = req.query.status ?? 'all'
+  if (typeof status !== 'string' || !Object.hasOwn(STATUS_FILTERS, status)) {
+    return res.status(400).json({ message: 'Invalid status filter' })
+  }
+  const filter = STATUS_FILTERS[status]
+
+  let page = intParam(req.query.page, 1)
+  if (page < 1) page = 1
+  if (page > MAX_PAGE) page = MAX_PAGE
+  const limit = Math.min(MAX_LIMIT, Math.max(1, intParam(req.query.limit, DEFAULT_LIMIT)))
+
+  const [complaints, total, overall, open, completed] = await Promise.all([
+    Complaint.find(filter).sort({ urgent: -1, createdAt: -1 }).skip((page - 1) * limit).limit(limit),
+    Complaint.countDocuments(filter),
+    Complaint.countDocuments(),
+    Complaint.countDocuments(STATUS_FILTERS.open),
+    Complaint.countDocuments({ status: 'Completed' })
+  ])
+
+  res.json({
+    complaints,
+    page,
+    limit,
+    total,
+    pages: Math.max(1, Math.ceil(total / limit)),
+    // Over all complaints regardless of the filter, for the stat boxes
+    counts: { total: overall, open, completed }
+  })
 })
 
-router.patch('/:id', protect, allowRoles('warden'), async (req, res) => {
+router.patch('/:id', protect, requirePasswordChanged, allowRoles('warden'), async (req, res) => {
   const { status } = req.body || {}
 
   if (!COMPLAINT_STATUSES.includes(status)) {

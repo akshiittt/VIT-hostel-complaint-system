@@ -49,8 +49,23 @@ const userSchema = new mongoose.Schema({
     trim: true,
     maxlength: LIMITS.room,
     default: ''
+  },
+  // Embedded in every token as `v`. Incrementing it revokes all existing
+  // tokens for this user (see middleware/auth.js). Never sent to the client.
+  tokenVersion: {
+    type: Number,
+    default: 0
+  },
+  // Set when a warden resets the password; cleared by change-password
+  mustChangePassword: {
+    type: Boolean,
+    default: false
   }
 }, { timestamps: true })
+
+// One account per registration number. Partial so wardens, who all have
+// regNumber '', don't collide.
+userSchema.index({ regNumber: 1 }, { unique: true, partialFilterExpression: { role: 'student' } })
 
 // The only place passwords get hashed. Callers (routes, seed.js) must pass
 // the plain password, otherwise it would be hashed twice and login would fail.
@@ -73,7 +88,8 @@ userSchema.methods.toPublic = function () {
     regNumber: this.regNumber,
     hostelType: this.hostelType,
     block: this.block,
-    room: this.room
+    room: this.room,
+    mustChangePassword: this.mustChangePassword
   }
 }
 

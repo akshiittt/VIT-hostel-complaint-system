@@ -34,7 +34,9 @@ The code is on the `vercel-backend` branch. Push it, then either merge it into `
    - `JWT_SECRET`: a long random string. Generate one with:
      `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`
    - `ALLOWED_ORIGINS`: `http://localhost:5173` for now. You'll update it in step 5.
-4. Deploy. Then open `https://<api-project>.vercel.app/api/health`. It should show `{"status":"ok"}`.
+   - `ALLOWED_EMAIL_DOMAINS` (recommended): `vitstudent.ac.in`, so only university emails can sign up. Leave it empty to allow any email.
+4. Deploy. Then open `https://<api-project>.vercel.app/api/health`. It should show `{"status":"ok","db":"ok"}`. `"db":"unreachable"` means Atlas isn't reachable: check `MONGO_URI` and Atlas Network Access.
+   `vercel.json` pins the framework to "Other", so Vercel always runs `api/index.js`.
 
 ## 4. Deploy the frontend
 
@@ -73,6 +75,7 @@ npm run seed
   - login: 300 per 15 minutes per IP, and register: 100 per hour per IP. These are deliberately generous, because hostel WiFi puts many students behind one shared IP.
 
   Blocked requests get HTTP 429 with a `Retry-After` header. For extra protection you can also add a rule under Vercel → Firewall, but it isn't required.
+- **Forgotten passwords:** there's no email reset yet. The warden uses "Reset a student's password" in the warden panel and gives the student the temporary password privately. To change the warden's own password, use "Change password" in the app, or re-run `npm run seed`.
 - **Missing config:** if `MONGO_URI` or `JWT_SECRET` is missing, every `/api` call returns 500 "Server is not configured correctly", and `/api/health` returns 503 with the names of the missing variables. Check `/api/health` first whenever something looks broken after a deploy.
 
 ## Running locally
@@ -95,9 +98,11 @@ Run the backend tests with `cd backend && npm test`. They use a temporary in-mem
 | POST | `/api/auth/register` | anyone | Student sign-up → `{ token, user }` |
 | POST | `/api/auth/login` | anyone | Email + password → `{ token, user }` |
 | GET | `/api/auth/me` | logged in | Current user |
+| POST | `/api/auth/change-password` | logged in | `{ currentPassword, newPassword }` → new `{ token, user }`; logs out other sessions |
+| POST | `/api/auth/reset-password` | warden | `{ email }` → `{ email, temporaryPassword }`; student must change it at next login |
 | POST | `/api/complaints` | student | Submit complaint |
 | GET | `/api/complaints/mine` | student | Own complaints |
-| GET | `/api/complaints` | warden | All complaints, urgent first |
+| GET | `/api/complaints?status=&page=&limit=` | warden | Paged list, urgent first, with `counts` |
 | PATCH | `/api/complaints/:id` | warden | `{ status: "Pending" \| "In Progress" \| "Completed" }` |
 | GET | `/api/health` | anyone | Health check |
 

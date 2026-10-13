@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { HOSTEL_BLOCKS, COMPLAINT_TYPES } from '../constants'
+import { HOSTEL_BLOCKS, COMPLAINT_TYPES, LIMITS } from '../constants'
 
 function ComplaintForm({ user, addComplaint }) {
   const [formData, setFormData] = useState({
@@ -90,6 +90,7 @@ function ComplaintForm({ user, addComplaint }) {
             type="text"
             name="room"
             placeholder="e.g. 204"
+            maxLength={LIMITS.room}
             value={formData.room}
             onChange={handleChange}
           />
@@ -119,7 +120,7 @@ function ComplaintForm({ user, addComplaint }) {
             id="complaint-description"
             name="description"
             rows="4"
-            maxLength={2000}
+            maxLength={LIMITS.description}
             placeholder="Describe your complaint..."
             value={formData.description}
             onChange={handleChange}

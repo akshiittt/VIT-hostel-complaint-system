@@ -4,3 +4,8 @@ export const HOSTEL_BLOCKS = {
 }
 
 export const COMPLAINT_TYPES = ['Electricity Issue', 'Water Issue', 'WiFi Issue', 'Room Change Request', 'Others']
+
+export const COMPLAINT_STATUSES = ['Pending', 'In Progress', 'Completed']
+
+// Must match backend/lib/constants.js LIMITS (max field lengths)
+export const LIMITS = { name: 100, email: 254, password: 72, regNumber: 20, room: 20, description: 2000 }

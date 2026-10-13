@@ -1,7 +1,10 @@
+const STATUS_BADGES = {
+  Completed: 'badge-status-completed',
+  'In Progress': 'badge-status-progress'
+}
+
 function ComplaintCard({ complaint, showActions, updateComplaintStatus }) {
-  const statusClass = complaint.status === 'Completed'
-    ? 'badge-status-completed'
-    : 'badge-status-pending'
+  const statusClass = STATUS_BADGES[complaint.status] || 'badge-status-pending'
 
   const submittedOn = complaint.createdAt
     ? new Date(complaint.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
@@ -38,6 +41,13 @@ function ComplaintCard({ complaint, showActions, updateComplaintStatus }) {
             onClick={() => updateComplaintStatus(complaint._id, 'Completed')}
           >
             Mark as Completed
+          </button>
+          <button
+            className="btn-progress"
+            disabled={complaint.status === 'In Progress'}
+            onClick={() => updateComplaintStatus(complaint._id, 'In Progress')}
+          >
+            Mark In Progress
           </button>
           <button
             className="btn-pending"

@@ -52,6 +52,29 @@ describe('ComplaintCard warden actions', () => {
     expect(updateComplaintStatus).toHaveBeenCalledWith('c1', 'Completed')
   })
 
+  it('marks a complaint In Progress, and disables that button when it already is', async () => {
+    const updateComplaintStatus = vi.fn()
+    const user = userEvent.setup()
+    const { rerender } = render(
+      <ComplaintCard complaint={makeComplaint()} showActions updateComplaintStatus={updateComplaintStatus} />
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Mark In Progress' }))
+    expect(updateComplaintStatus).toHaveBeenCalledWith('c1', 'In Progress')
+
+    rerender(
+      <ComplaintCard
+        complaint={makeComplaint({ status: 'In Progress' })}
+        showActions
+        updateComplaintStatus={updateComplaintStatus}
+      />
+    )
+    expect(screen.getByRole('button', { name: 'Mark In Progress' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Mark as Pending' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Mark as Completed' })).toBeEnabled()
+    expect(screen.getByText('In Progress')).toHaveClass('badge-status-progress')
+  })
+
   it('hides the actions for students', () => {
     render(<ComplaintCard complaint={makeComplaint()} showActions={false} />)
 

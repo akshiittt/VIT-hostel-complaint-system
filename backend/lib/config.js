@@ -18,4 +18,14 @@ function parseAllowedOrigins(value) {
   return origins.length ? origins : ['http://localhost:5173']
 }
 
-module.exports = { missingConfig, parseAllowedOrigins, REQUIRED_ENV }
+// Email domains students may sign up with, from ALLOWED_EMAIL_DOMAINS
+// (comma-separated). Read on every call like missingConfig. An empty list
+// means any domain is allowed.
+function allowedEmailDomains() {
+  return (process.env.ALLOWED_EMAIL_DOMAINS || '')
+    .split(',')
+    .map((domain) => domain.trim().toLowerCase())
+    .filter(Boolean)
+}
+
+module.exports = { missingConfig, parseAllowedOrigins, allowedEmailDomains, REQUIRED_ENV }

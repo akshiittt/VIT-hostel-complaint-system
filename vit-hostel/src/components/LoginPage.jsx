@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import vitLogo from '../assets/vit-logo.jpg'
 import { apiRequest } from '../api'
-import { HOSTEL_BLOCKS } from '../constants'
+import { HOSTEL_BLOCKS, LIMITS } from '../constants'
 
 const emptyRegister = {
   name: '',
@@ -94,6 +94,7 @@ function LoginPage({ onLogin }) {
                 name="email"
                 placeholder="you@vitstudent.ac.in"
                 autoComplete="email"
+                maxLength={LIMITS.email}
                 value={loginData.email}
                 onChange={handleLoginChange}
               />
@@ -107,6 +108,7 @@ function LoginPage({ onLogin }) {
                 name="password"
                 placeholder="Your password"
                 autoComplete="current-password"
+                maxLength={LIMITS.password}
                 value={loginData.password}
                 onChange={handleLoginChange}
               />
@@ -131,22 +133,22 @@ function LoginPage({ onLogin }) {
           <form onSubmit={handleRegister}>
             <div className="form-group">
               <label htmlFor="register-name">Full Name</label>
-              <input id="register-name" type="text" name="name" placeholder="Your full name" value={registerData.name} onChange={handleRegisterChange} />
+              <input id="register-name" type="text" name="name" placeholder="Your full name" maxLength={LIMITS.name} value={registerData.name} onChange={handleRegisterChange} />
             </div>
 
             <div className="form-group">
               <label htmlFor="register-reg-number">Registration Number</label>
-              <input id="register-reg-number" type="text" name="regNumber" placeholder="e.g. 23BCE1234" value={registerData.regNumber} onChange={handleRegisterChange} />
+              <input id="register-reg-number" type="text" name="regNumber" placeholder="e.g. 23BCE1234" maxLength={LIMITS.regNumber} value={registerData.regNumber} onChange={handleRegisterChange} />
             </div>
 
             <div className="form-group">
               <label htmlFor="register-email">Email</label>
-              <input id="register-email" type="email" name="email" placeholder="you@vitstudent.ac.in" autoComplete="email" value={registerData.email} onChange={handleRegisterChange} />
+              <input id="register-email" type="email" name="email" placeholder="you@vitstudent.ac.in" autoComplete="email" maxLength={LIMITS.email} value={registerData.email} onChange={handleRegisterChange} />
             </div>
 
             <div className="form-group">
               <label htmlFor="register-password">Password</label>
-              <input id="register-password" type="password" name="password" placeholder="At least 6 characters" autoComplete="new-password" value={registerData.password} onChange={handleRegisterChange} />
+              <input id="register-password" type="password" name="password" placeholder="At least 6 characters" autoComplete="new-password" maxLength={LIMITS.password} value={registerData.password} onChange={handleRegisterChange} />
             </div>
 
             <div className="form-group">
@@ -171,7 +173,7 @@ function LoginPage({ onLogin }) {
 
             <div className="form-group">
               <label htmlFor="register-room">Room Number</label>
-              <input id="register-room" type="text" name="room" placeholder="e.g. 204" value={registerData.room} onChange={handleRegisterChange} />
+              <input id="register-room" type="text" name="room" placeholder="e.g. 204" maxLength={LIMITS.room} value={registerData.room} onChange={handleRegisterChange} />
             </div>
 
             {error && <p className="error-msg" role="alert">{error}</p>}
