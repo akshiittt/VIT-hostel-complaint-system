@@ -1,9 +1,9 @@
 import ComplaintCard from './ComplaintCard'
 import vitLogo from '../assets/vit-logo.jpg'
 
-function WardenPanel({ complaints, updateComplaintStatus, onLogout }) {
+function WardenPanel({ complaints, loading, loadError, onRefresh, updateComplaintStatus, onLogout }) {
   const totalCount = complaints.length
-  const pendingCount = complaints.filter((c) => c.status === 'Pending').length
+  const pendingCount = complaints.filter((c) => c.status !== 'Completed').length
   const doneCount = complaints.filter((c) => c.status === 'Completed').length
 
   return (
@@ -21,7 +21,12 @@ function WardenPanel({ complaints, updateComplaintStatus, onLogout }) {
 
       <div className="warden-container">
         <div className="warden-top">
-          <h2 className="panel-heading">All Complaints</h2>
+          <h2 className="panel-heading">
+            All Complaints
+            <button className="refresh-btn" onClick={onRefresh} disabled={loading}>
+              {loading ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </h2>
           <div className="stats-row">
             <div className="stat-box">
               <span>{totalCount}</span>
@@ -38,14 +43,17 @@ function WardenPanel({ complaints, updateComplaintStatus, onLogout }) {
           </div>
         </div>
 
-        {complaints.length === 0 ? (
+        {loadError && <p className="error-msg" role="alert">{loadError}</p>}
+
+        {loading && complaints.length === 0 ? (
+          <p className="empty-msg">Loading complaints…</p>
+        ) : complaints.length === 0 ? (
           <p className="empty-msg">No complaints found. Students haven't submitted any yet.</p>
         ) : (
-          complaints.map((complaint, index) => (
+          complaints.map((complaint) => (
             <ComplaintCard
-              key={index}
+              key={complaint._id}
               complaint={complaint}
-              index={index}
               showActions={true}
               updateComplaintStatus={updateComplaintStatus}
             />

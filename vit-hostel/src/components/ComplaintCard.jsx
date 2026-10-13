@@ -1,7 +1,11 @@
-function ComplaintCard({ complaint, index, showActions, updateComplaintStatus }) {
+function ComplaintCard({ complaint, showActions, updateComplaintStatus }) {
   const statusClass = complaint.status === 'Completed'
     ? 'badge-status-completed'
     : 'badge-status-pending'
+
+  const submittedOn = complaint.createdAt
+    ? new Date(complaint.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+    : ''
 
   return (
     <div className={`complaint-card ${complaint.urgent ? 'urgent' : ''}`}>
@@ -21,6 +25,7 @@ function ComplaintCard({ complaint, index, showActions, updateComplaintStatus })
 
       <div className="card-hostel">
         {complaint.hostelType} &nbsp;|&nbsp; Block {complaint.block} &nbsp;|&nbsp; Room {complaint.room}
+        {submittedOn && <> &nbsp;|&nbsp; {submittedOn}</>}
       </div>
 
       <div className="card-desc">{complaint.description}</div>
@@ -29,13 +34,15 @@ function ComplaintCard({ complaint, index, showActions, updateComplaintStatus })
         <div className="card-actions">
           <button
             className="btn-complete"
-            onClick={() => updateComplaintStatus(index, 'Completed')}
+            disabled={complaint.status === 'Completed'}
+            onClick={() => updateComplaintStatus(complaint._id, 'Completed')}
           >
             Mark as Completed
           </button>
           <button
             className="btn-pending"
-            onClick={() => updateComplaintStatus(index, 'Pending')}
+            disabled={complaint.status === 'Pending'}
+            onClick={() => updateComplaintStatus(complaint._id, 'Pending')}
           >
             Mark as Pending
           </button>

@@ -72,6 +72,22 @@ body {
   margin-bottom: 6px;
 }
 
+.radio-fieldset {
+  border: none;
+  padding: 0;
+  margin: 0 0 16px;
+  min-width: 0;
+}
+
+.radio-fieldset legend {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 6px;
+  padding: 0;
+}
+
 .form-group input,
 .form-group select,
 .form-group textarea {
@@ -83,7 +99,6 @@ body {
   font-family: inherit;
   background: #fafbfd;
   color: #333;
-  outline: none;
   transition: border-color 0.2s;
 }
 
@@ -367,7 +382,10 @@ body {
   font-size: 13px;
   background: #fafbfd;
   font-family: inherit;
-  outline: none;
+}
+
+.filter-group select:focus {
+  border-color: #4a90e2;
 }
 
 .empty-msg {
@@ -461,6 +479,8 @@ body {
   font-size: 13px;
   color: #444;
   line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .card-actions {
@@ -546,4 +566,95 @@ body {
   .login-buttons {
     flex-direction: column;
   }
+}
+
+/* ---------- Backend integration additions ---------- */
+.loading-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #7a8899;
+  font-size: 15px;
+}
+
+.auth-switch {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 13px;
+  color: #7a8899;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #4a90e2;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.link-btn:hover {
+  text-decoration: underline;
+}
+
+.success-msg {
+  color: #27ae60;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.submitting-as {
+  font-size: 13px;
+  color: #7a8899;
+  margin: -6px 0 16px;
+}
+
+.refresh-btn {
+  margin-left: 12px;
+  padding: 4px 12px;
+  border: 1.5px solid #dce3ee;
+  border-radius: 6px;
+  background: #fff;
+  color: #4a90e2;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.btn:disabled,
+.refresh-btn:disabled,
+.card-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.session-error {
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  text-align: center;
+}
+
+.session-error-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.session-error-actions .refresh-btn {
+  margin-left: 0;
+}
+
+/* Visible keyboard focus */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.link-btn:focus-visible {
+  outline: 2px solid #4a90e2;
+  outline-offset: 2px;
 }

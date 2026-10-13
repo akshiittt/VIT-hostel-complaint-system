@@ -1,24 +1,23 @@
 import { useState } from 'react'
+import { HOSTEL_BLOCKS, COMPLAINT_TYPES } from '../constants'
 
-const mensBlocks = ['A','B','C','D','E','F','G','H','J','K','L','M','N','P','Q','R','S','T']
-const womensBlocks = ['A','B','C','D','E','F','G','H','J']
-
-function ComplaintForm({ addComplaint }) {
+function ComplaintForm({ user, addComplaint }) {
   const [formData, setFormData] = useState({
-    name: '',
-    reg: '',
-    hostelType: '',
-    block: '',
-    room: '',
+    hostelType: user.hostelType || '',
+    block: user.block || '',
+    room: user.room || '',
     complaintType: '',
     description: '',
     urgent: false
   })
 
-  const [error, setError] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
   function handleChange(e) {
     const { name, value, type, checked } = e.target
+    setSuccess(false)
     setFormData({
       ...formData,
       [name]: type === 'checkbox' ? checked : value,
@@ -26,107 +25,68 @@ function ComplaintForm({ addComplaint }) {
     })
   }
 
-  function getBlocks() {
-    if (formData.hostelType === 'mens') return mensBlocks
-    if (formData.hostelType === 'womens') return womensBlocks
-    return []
-  }
-
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
 
     if (
-      formData.name.trim() === '' ||
-      formData.reg.trim() === '' ||
       formData.hostelType === '' ||
       formData.block === '' ||
       formData.room.trim() === '' ||
       formData.complaintType === '' ||
       formData.description.trim() === ''
     ) {
-      setError(true)
+      setError('Please fill in all required fields.')
       return
     }
 
-    setError(false)
-
-    const hostelLabel = formData.hostelType === 'mens' ? "Men's Hostel" : "Women's Hostel"
-
-    const newComplaint = {
-      name: formData.name,
-      reg: formData.reg,
-      hostelType: hostelLabel,
-      block: formData.block,
-      room: formData.room,
-      complaintType: formData.complaintType,
-      description: formData.description,
-      urgent: formData.urgent,
-      status: 'Pending'
+    setError('')
+    setSubmitting(true)
+    try {
+      // false means the session expired and the dashboard is unmounting
+      if (await addComplaint(formData) === false) return
+      setFormData({ ...formData, complaintType: '', description: '', urgent: false })
+      setSuccess(true)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSubmitting(false)
     }
-
-    addComplaint(newComplaint)
-
-    setFormData({
-      name: '',
-      reg: '',
-      hostelType: '',
-      block: '',
-      room: '',
-      complaintType: '',
-      description: '',
-      urgent: false
-    })
   }
+
+  const blocks = HOSTEL_BLOCKS[formData.hostelType] || []
 
   return (
     <div className="panel-card">
       <h2 className="panel-heading">Submit a Complaint</h2>
+      <p className="submitting-as">
+        Submitting as <strong>{user.name}</strong> ({user.regNumber})
+      </p>
 
       <form onSubmit={handleSubmit}>
         <div className="form-group">
-          <label>Student Name</label>
-          <input
-            type="text"
-            name="name"
-            placeholder="Your name"
-            value={formData.name}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div className="form-group">
-          <label>Registration Number</label>
-          <input
-            type="text"
-            name="reg"
-            placeholder="e.g. 23BCE1234"
-            value={formData.reg}
-            onChange={handleChange}
-          />
-        </div>
-
-        <div className="form-group">
-          <label>Hostel Type</label>
-          <select name="hostelType" value={formData.hostelType} onChange={handleChange}>
+          <label htmlFor="complaint-hostel-type">Hostel Type</label>
+          <select id="complaint-hostel-type" name="hostelType" value={formData.hostelType} onChange={handleChange}>
             <option value="">-- Select Hostel --</option>
-            <option value="mens">Men's Hostel</option>
-            <option value="womens">Women's Hostel</option>
+            {Object.keys(HOSTEL_BLOCKS).map((h) => (
+              <option key={h} value={h}>{h}</option>
+            ))}
           </select>
         </div>
 
         <div className="form-group">
-          <label>Hostel Block</label>
-          <select name="block" value={formData.block} onChange={handleChange}>
+          <label htmlFor="complaint-block">Hostel Block</label>
+          <select id="complaint-block" name="block" value={formData.block} onChange={handleChange}>
             <option value="">-- Select Block --</option>
-            {getBlocks().map((b) => (
+            {blocks.map((b) => (
               <option key={b} value={b}>Block {b}</option>
             ))}
           </select>
         </div>
 
         <div className="form-group">
-          <label>Room Number</label>
+          <label htmlFor="complaint-room">Room Number</label>
           <input
+            id="complaint-room"
             type="text"
             name="room"
             placeholder="e.g. 204"
@@ -135,10 +95,10 @@ function ComplaintForm({ addComplaint }) {
           />
         </div>
 
-        <div className="form-group">
-          <label>Complaint Type</label>
+        <fieldset className="form-group radio-fieldset">
+          <legend>Complaint Type</legend>
           <div className="radio-group">
-            {['Electricity Issue', 'Water Issue', 'WiFi Issue', 'Room Change Request', 'Others'].map((type) => (
+            {COMPLAINT_TYPES.map((type) => (
               <label key={type} className="radio-label">
                 <input
                   type="radio"
@@ -151,13 +111,15 @@ function ComplaintForm({ addComplaint }) {
               </label>
             ))}
           </div>
-        </div>
+        </fieldset>
 
         <div className="form-group">
-          <label>Description</label>
+          <label htmlFor="complaint-description">Description</label>
           <textarea
+            id="complaint-description"
             name="description"
             rows="4"
+            maxLength={2000}
             placeholder="Describe your complaint..."
             value={formData.description}
             onChange={handleChange}
@@ -176,11 +138,12 @@ function ComplaintForm({ addComplaint }) {
           </label>
         </div>
 
-        {error && (
-          <p className="error-msg">Please fill in all required fields.</p>
-        )}
+        {error && <p className="error-msg" role="alert">{error}</p>}
+        {success && <p className="success-msg" role="status">Complaint submitted.</p>}
 
-        <button type="submit" className="btn btn-submit">Submit Complaint</button>
+        <button type="submit" className="btn btn-submit" disabled={submitting}>
+          {submitting ? 'Submitting…' : 'Submit Complaint'}
+        </button>
       </form>
     </div>
   )

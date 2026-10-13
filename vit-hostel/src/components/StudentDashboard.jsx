@@ -2,7 +2,7 @@ import ComplaintForm from './ComplaintForm'
 import ComplaintList from './ComplaintList'
 import vitLogo from '../assets/vit-logo.jpg'
 
-function StudentDashboard({ complaints, addComplaint, onLogout }) {
+function StudentDashboard({ user, complaints, loading, loadError, addComplaint, onRefresh, onLogout }) {
   return (
     <div className="dashboard-body">
       <header className="topbar">
@@ -18,10 +18,10 @@ function StudentDashboard({ complaints, addComplaint, onLogout }) {
 
       <div className="dashboard-container">
         <div className="left-panel">
-          <ComplaintForm addComplaint={addComplaint} />
+          <ComplaintForm user={user} addComplaint={addComplaint} />
         </div>
         <div className="right-panel">
-          <ComplaintList complaints={complaints} />
+          <ComplaintList complaints={complaints} loading={loading} loadError={loadError} onRefresh={onRefresh} />
         </div>
       </div>
     </div>

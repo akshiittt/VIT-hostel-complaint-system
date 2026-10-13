@@ -1,0 +1,87 @@
+# Senior Review Checklist
+
+This checklist comes from a senior-engineer review of `backend/` and `vit-hostel/` (branch `vercel-backend`, 2026-10-13).
+
+- **Verdict:** ready to merge **with fixes**. Nothing is critical. Do the 🔴 items before real students use it.
+- **Baseline:** backend `npm test` passes 14/14, frontend `npm run build` succeeds.
+- **Status (2026-10-13):** items 1–21 fixed and verified.
+  - Backend `npm test`: **32/32**. Frontend `npm test`: **20/20** (Vitest). `npm run build` passes on Vite 6.4.4.
+  - Manual click-through passed on an in-memory DB: sign-up, multi-line complaint, warden completes it, Retry screen when the API is down, labels linked.
+  - Item 2 was done in code (a Mongo-backed limiter), so no Vercel dashboard rule is needed.
+
+Tick each box only when it's fixed **and** verified: a test for backend changes, a click-through for UI changes.
+
+---
+
+## 🔴 Before first production deploy
+
+- [x] **1. Fail clearly when config is missing.**
+  - `app.js` never checks `JWT_SECRET`/`MONGO_URI`; only `server.js` does, and Vercel never runs it.
+  - Without the secret, register saves the user, then `jwt.sign` throws a 500. Retrying gives 409 and every login gives 500, leaving orphaned accounts.
+  - Fix: check both in the `/api` middleware and return a clear 500 "Server misconfigured". Make `/api/health` report missing config.
+  - Test: unset `JWT_SECRET` → register returns 500 and **no user is saved**.
+  - Files: `backend/app.js`, `backend/routes/auth.js:35-37`
+- [x] **2. Rate-limit the auth routes.**
+  - Nothing stops password guessing on the warden account or scripted mass sign-ups.
+  - An in-memory limiter doesn't work on Vercel, because each instance has its own memory.
+  - Fix: a Vercel Firewall rate-limit rule on `/api/auth/*` (dashboard, no code), or a Mongo-backed limiter keyed on IP + email with `app.set('trust proxy', 1)`.
+  - Files: `backend/routes/auth.js:13,40`
+- [x] **3. Seed must not fall back to the published password.**
+  - Without `SEED_WARDEN_PASSWORD`, the seed creates `warden@vithostel.com` / `warden1234`, and both values are public on GitHub.
+  - `deleteOne` also silently deletes a *student* who uses that email.
+  - Fix: refuse to run without `SEED_WARDEN_PASSWORD` (≥ 8 chars) unless `MONGO_URI` points to localhost, and refuse if the existing account with that email is not a warden.
+  - Files: `backend/seed.js:10-28`
+- [x] **4. Tie form labels to their inputs.**
+  - Labels are siblings with no `htmlFor`/`id`, so screen readers announce unnamed fields and clicking a label doesn't focus the field (fails WCAG 1.3.1 / 4.1.2).
+  - Fix: `id` + `htmlFor` on every field, `<fieldset><legend>` for the complaint-type radios, `role="alert"` on `.error-msg` and `role="status"` on `.success-msg`.
+  - Files: `LoginPage.jsx`, `ComplaintForm.jsx`, `ComplaintList.jsx:19-20`
+
+## 🟠 Backend hardening (small, each with a test)
+
+- [x] **5. Duplicate-email race → 409, not 500.** Check-then-create isn't atomic: parallel register requests returned `[201, 500, 500]`. Map Mongo error `11000` to 409 in the error handler. (`routes/auth.js:29-35`, `app.js`)
+- [x] **6. Honour `err.status` in the error handler.** A body over 100 kB returns 500 instead of 413. Use `err.status` when `err.expose` is true. (`app.js:38-44`)
+- [x] **7. Add length limits to string fields.** A 90 kB name was accepted and gets copied into every complaint. Add `maxlength` and route checks: name 100, regNumber 20, room 20, email 254. (`models/User.js`, `models/Complaint.js:27`)
+- [x] **8. `resolvedAt` should only change on a real transition.** Marking an already-completed complaint "Completed" again overwrites the original resolution date. (`routes/complaints.js:64`)
+- [x] **9. Add indexes matching the sorts:** `{ studentId: 1, createdAt: -1 }` for `/mine` and `{ urgent: -1, createdAt: -1 }` for the warden list. (`models/Complaint.js`)
+- [x] **10. Pin the Node major version:** `"engines": { "node": "22.x" }` so Vercel doesn't move to a new major on its own. (`backend/package.json:8`)
+
+## 🟠 Frontend behaviour
+
+- [x] **11. Only log out on 401 during session restore.** `.catch(() => clearToken())` also logs the user out on network errors and Atlas cold-start timeouts. Clear the token only on `status === 401`, otherwise show a retry option. (`App.jsx:20`)
+- [x] **12. Handle 401 on complaint submit.** An expired token shows "Not authorized, token failed" in the form instead of logging out. (`App.jsx:56-59`)
+- [x] **13. Ignore stale responses after logout/login.** If a warden logs out and a student logs in before an in-flight `loadComplaints` finishes, the old list can overwrite the new one. Use an AbortController or a request id. (`App.jsx:31-48`)
+- [x] **14. Refresh button for students.** Students can't see status changes without reloading the page. Pass `onRefresh` to `ComplaintList`, like the warden panel. (`StudentDashboard.jsx`, `ComplaintList.jsx`)
+- [x] **15. Keep description formatting.** Add `white-space: pre-wrap; overflow-wrap: anywhere;` so newlines are kept and long strings don't overflow on phones. (`App.css` `.card-desc`)
+- [x] **16. Make keyboard focus visible.** Remove `outline: none` and add `:focus-visible` outlines. (`App.css:86`, `App.css:370`)
+- [x] **17. One source for the filter options.** `ComplaintList.jsx:21-26` hard-codes the complaint types; map over `COMPLAINT_TYPES` instead.
+
+## 🟡 Deploy and tooling
+
+- [x] **18. Document that CORS blocks Vercel preview URLs.** `ALLOWED_ORIGINS` is an exact list. Note it in `DEPLOY.md` step 5, or allow the project's preview domain pattern.
+- [x] **19. Upgrade Vite 4, which is end-of-life,** to Vite 6+ with `@vitejs/plugin-react` ≥ 4.3, then rebuild and click through. (`vit-hostel/package.json`)
+
+## 🟡 Tests
+
+- [x] **20. Backend tests for:** missing `JWT_SECRET`, duplicate-email race, payload too large (413), CORS allow/deny, "In Progress" status, field length limits. (Most come with items 1, 5, 6 and 7.)
+- [x] **21. Frontend tests:** add Vitest + React Testing Library covering login/register validation, the complaint form (block resets on hostel change, errors shown), and the warden status buttons.
+
+---
+
+## Follow-ups found during the fixes
+
+- [ ] **22. Status-update failures use a blocking `alert()` popup.** Show an on-page `role="alert"` message in the warden panel instead. (`vit-hostel/src/App.jsx` `updateComplaintStatus`)
+- [ ] **23. The frontend doesn't enforce the backend `LIMITS`.** Add `maxLength` (name 100, regNumber 20, room 20, password 72) to the register and complaint inputs, so users see the limit before the server rejects them. (Mirror `LIMITS` in `vit-hostel/src/constants.js`.)
+- [ ] **24. Advisories in dev-only test tooling.** `npm audit` reports 3 (tinypool, @vitest/mocker). They're not in the production bundle. Fixing them needs Vitest 4+/Vite 7+, so revisit with the next Vite upgrade.
+- [x] WardenPanel load error was missing `role="alert"`. Fixed.
+
+## Accepted decisions (not fixing now)
+
+- **JWT in localStorage, 7-day expiry, no server-side revocation.** Acceptable because there are no XSS sinks (React escaping, no `dangerouslySetInnerHTML`). httpOnly cookies would need SameSite/CSRF handling across two Vercel domains. Revisit if an admin role is added in phase 2.
+- **Login timing reveals which emails exist.** An unknown email skips bcrypt and responds faster. Low impact, since register's 409 already reveals whether an email exists.
+- **No pagination** on complaint lists. Fine at hostel scale; revisit if the warden list grows past a few hundred.
+
+## Out of scope for phase 1 (from the review's "declined" list)
+
+- Cleaning staff, admin dashboard, email alerts: phase 2.
+- Email verification / restricting sign-up to `@vitstudent.ac.in`: worth considering with item 2 to cut spam accounts.
+- Warden "In Progress" button, editing or deleting complaints, password reset: not in the spec.

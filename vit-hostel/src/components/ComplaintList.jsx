@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import ComplaintCard from './ComplaintCard'
+import { COMPLAINT_TYPES } from '../constants'
 
-function ComplaintList({ complaints }) {
+function ComplaintList({ complaints, loading, loadError, onRefresh }) {
   const [filter, setFilter] = useState('All')
 
   function getFilteredComplaints() {
@@ -14,28 +15,34 @@ function ComplaintList({ complaints }) {
   return (
     <div className="panel-card">
       <div className="complaints-header">
-        <h2 className="panel-heading">My Complaints</h2>
+        <h2 className="panel-heading">
+          My Complaints
+          <button type="button" className="refresh-btn" onClick={onRefresh} disabled={loading}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </h2>
         <div className="filter-group">
-          <label>Filter by:</label>
-          <select value={filter} onChange={(e) => setFilter(e.target.value)}>
+          <label htmlFor="complaint-filter">Filter by:</label>
+          <select id="complaint-filter" value={filter} onChange={(e) => setFilter(e.target.value)}>
             <option value="All">All</option>
-            <option value="Electricity Issue">Electricity</option>
-            <option value="Water Issue">Water</option>
-            <option value="WiFi Issue">WiFi</option>
-            <option value="Room Change Request">Room Change</option>
-            <option value="Others">Others</option>
+            {COMPLAINT_TYPES.map((type) => (
+              <option key={type} value={type}>{type.replace(/ (Issue|Request)$/, '')}</option>
+            ))}
           </select>
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {loadError && <p className="error-msg" role="alert">{loadError}</p>}
+
+      {loading && complaints.length === 0 ? (
+        <p className="empty-msg">Loading complaints…</p>
+      ) : filtered.length === 0 ? (
         <p className="empty-msg">No complaints found.</p>
       ) : (
-        filtered.map((complaint, index) => (
+        filtered.map((complaint) => (
           <ComplaintCard
-            key={index}
+            key={complaint._id}
             complaint={complaint}
-            index={index}
             showActions={false}
           />
         ))

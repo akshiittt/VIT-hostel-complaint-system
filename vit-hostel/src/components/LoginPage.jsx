@@ -1,28 +1,77 @@
 import { useState } from 'react'
 import vitLogo from '../assets/vit-logo.jpg'
+import { apiRequest } from '../api'
+import { HOSTEL_BLOCKS } from '../constants'
+
+const emptyRegister = {
+  name: '',
+  regNumber: '',
+  email: '',
+  password: '',
+  hostelType: '',
+  block: '',
+  room: ''
+}
 
 function LoginPage({ onLogin }) {
-  const [name, setName] = useState('')
-  const [idNumber, setIdNumber] = useState('')
-  const [error, setError] = useState(false)
+  const [mode, setMode] = useState('login')
+  const [loginData, setLoginData] = useState({ email: '', password: '' })
+  const [registerData, setRegisterData] = useState(emptyRegister)
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
-  function handleStudentLogin() {
-    if (name.trim() === '' || idNumber.trim() === '') {
-      setError(true)
-      return
-    }
-    setError(false)
-    onLogin('student')
+  function handleLoginChange(e) {
+    setLoginData({ ...loginData, [e.target.name]: e.target.value })
   }
 
-  function handleWardenLogin() {
-    if (name.trim() === '' || idNumber.trim() === '') {
-      setError(true)
+  function handleRegisterChange(e) {
+    const { name, value } = e.target
+    setRegisterData({
+      ...registerData,
+      [name]: value,
+      ...(name === 'hostelType' ? { block: '' } : {})
+    })
+  }
+
+  function switchMode(next) {
+    setMode(next)
+    setError('')
+  }
+
+  async function submit(path, body) {
+    setSubmitting(true)
+    setError('')
+    try {
+      onLogin(await apiRequest(path, { method: 'POST', body }))
+    } catch (err) {
+      setError(err.message)
+      setSubmitting(false)
+    }
+  }
+
+  function handleLogin(e) {
+    e.preventDefault()
+    if (loginData.email.trim() === '' || loginData.password === '') {
+      setError('Please enter your email and password.')
       return
     }
-    setError(false)
-    onLogin('warden')
+    submit('/api/auth/login', loginData)
   }
+
+  function handleRegister(e) {
+    e.preventDefault()
+    if (Object.values(registerData).some((v) => v.trim() === '')) {
+      setError('Please fill in all fields.')
+      return
+    }
+    if (registerData.password.length < 6) {
+      setError('Password must be at least 6 characters.')
+      return
+    }
+    submit('/api/auth/register', registerData)
+  }
+
+  const blocks = HOSTEL_BLOCKS[registerData.hostelType] || []
 
   return (
     <div className="login-page">
@@ -35,38 +84,112 @@ function LoginPage({ onLogin }) {
           <p className="login-subtitle">Complaint & Request System</p>
         </div>
 
-        <div className="form-group">
-          <label>Full Name</label>
-          <input
-            type="text"
-            placeholder="Enter your full name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </div>
+        {mode === 'login' ? (
+          <form onSubmit={handleLogin}>
+            <div className="form-group">
+              <label htmlFor="login-email">Email</label>
+              <input
+                id="login-email"
+                type="email"
+                name="email"
+                placeholder="you@vitstudent.ac.in"
+                autoComplete="email"
+                value={loginData.email}
+                onChange={handleLoginChange}
+              />
+            </div>
 
-        <div className="form-group">
-          <label>Registration No. / Staff ID</label>
-          <input
-            type="text"
-            placeholder="e.g. 23BCE1234 or STAFF001"
-            value={idNumber}
-            onChange={(e) => setIdNumber(e.target.value)}
-          />
-        </div>
+            <div className="form-group">
+              <label htmlFor="login-password">Password</label>
+              <input
+                id="login-password"
+                type="password"
+                name="password"
+                placeholder="Your password"
+                autoComplete="current-password"
+                value={loginData.password}
+                onChange={handleLoginChange}
+              />
+            </div>
 
-        {error && (
-          <p className="error-msg">Please fill in both fields.</p>
+            {error && <p className="error-msg" role="alert">{error}</p>}
+
+            <div className="login-buttons">
+              <button type="submit" className="btn btn-student" disabled={submitting}>
+                {submitting ? 'Logging in…' : 'Login'}
+              </button>
+            </div>
+
+            <p className="auth-switch">
+              New student?{' '}
+              <button type="button" className="link-btn" onClick={() => switchMode('register')}>
+                Create an account
+              </button>
+            </p>
+          </form>
+        ) : (
+          <form onSubmit={handleRegister}>
+            <div className="form-group">
+              <label htmlFor="register-name">Full Name</label>
+              <input id="register-name" type="text" name="name" placeholder="Your full name" value={registerData.name} onChange={handleRegisterChange} />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="register-reg-number">Registration Number</label>
+              <input id="register-reg-number" type="text" name="regNumber" placeholder="e.g. 23BCE1234" value={registerData.regNumber} onChange={handleRegisterChange} />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="register-email">Email</label>
+              <input id="register-email" type="email" name="email" placeholder="you@vitstudent.ac.in" autoComplete="email" value={registerData.email} onChange={handleRegisterChange} />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="register-password">Password</label>
+              <input id="register-password" type="password" name="password" placeholder="At least 6 characters" autoComplete="new-password" value={registerData.password} onChange={handleRegisterChange} />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="register-hostel-type">Hostel Type</label>
+              <select id="register-hostel-type" name="hostelType" value={registerData.hostelType} onChange={handleRegisterChange}>
+                <option value="">-- Select Hostel --</option>
+                {Object.keys(HOSTEL_BLOCKS).map((h) => (
+                  <option key={h} value={h}>{h}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="register-block">Hostel Block</label>
+              <select id="register-block" name="block" value={registerData.block} onChange={handleRegisterChange}>
+                <option value="">-- Select Block --</option>
+                {blocks.map((b) => (
+                  <option key={b} value={b}>Block {b}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="register-room">Room Number</label>
+              <input id="register-room" type="text" name="room" placeholder="e.g. 204" value={registerData.room} onChange={handleRegisterChange} />
+            </div>
+
+            {error && <p className="error-msg" role="alert">{error}</p>}
+
+            <div className="login-buttons">
+              <button type="submit" className="btn btn-student" disabled={submitting}>
+                {submitting ? 'Creating account…' : 'Create Account'}
+              </button>
+            </div>
+
+            <p className="auth-switch">
+              Already have an account?{' '}
+              <button type="button" className="link-btn" onClick={() => switchMode('login')}>
+                Log in
+              </button>
+            </p>
+          </form>
         )}
-
-        <div className="login-buttons">
-          <button className="btn btn-student" onClick={handleStudentLogin}>
-            Login as Student
-          </button>
-          <button className="btn btn-warden" onClick={handleWardenLogin}>
-            Login as Warden
-          </button>
-        </div>
       </div>
     </div>
   )
