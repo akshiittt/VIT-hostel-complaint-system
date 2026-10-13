@@ -1,3 +1,5 @@
 node_modules
-.env
 .vercel
+# Local secrets (.env, .env.local from `vercel link`); keep the example
+.env*
+!.env.example
