@@ -38,10 +38,11 @@ function resolvePassword(env) {
   return { password }
 }
 
+// passwordResult: the return value of resolvePassword(env), computed once by seed.js.
 // existingUser: the user already stored with the warden email, or null/undefined.
 // Returns { action: 'create' | 'update' | 'abort', reason, password, warning }.
-function planSeed({ env, existingUser }) {
-  const { password, warning, error } = resolvePassword(env)
+function planSeed({ passwordResult, existingUser }) {
+  const { password, warning, error } = passwordResult
   if (error) return { action: 'abort', reason: error }
 
   if (existingUser && existingUser.role !== 'warden') {

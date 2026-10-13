@@ -69,8 +69,8 @@ npm run seed
 ## Security notes
 
 - **Rate limiting** is built into the API. Counts are stored in MongoDB (collection `ratelimits`), so all Vercel instances share them:
-  - login: 10 attempts per 15 minutes per email + IP, and 50 per 15 minutes per IP
-  - register: 10 per hour per IP
+  - login: 10 attempts per 15 minutes per email + IP. This is the limit that stops password guessing.
+  - login: 300 per 15 minutes per IP, and register: 100 per hour per IP. These are deliberately generous, because hostel WiFi puts many students behind one shared IP.
 
   Blocked requests get HTTP 429 with a `Retry-After` header. For extra protection you can also add a rule under Vercel → Firewall, but it isn't required.
 - **Missing config:** if `MONGO_URI` or `JWT_SECRET` is missing, every `/api` call returns 500 "Server is not configured correctly", and `/api/health` returns 503 with the names of the missing variables. Check `/api/health` first whenever something looks broken after a deploy.

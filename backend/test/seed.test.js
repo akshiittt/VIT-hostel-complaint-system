@@ -1,6 +1,9 @@
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
-const { planSeed, isLocalMongoUri, DEMO_PASSWORD } = require('../lib/seedPlan')
+const { planSeed: planFromResult, resolvePassword, isLocalMongoUri, DEMO_PASSWORD } = require('../lib/seedPlan')
+
+// seed.js resolves the password once, then hands the result to planSeed
+const planSeed = ({ env, existingUser }) => planFromResult({ passwordResult: resolvePassword(env), existingUser })
 
 const remote = 'mongodb+srv://user:pw@cluster0.example.mongodb.net/vithostel'
 const local = 'mongodb://localhost:27017/vithostel'

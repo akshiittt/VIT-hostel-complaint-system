@@ -6,4 +6,16 @@ function missingConfig() {
   return REQUIRED_ENV.filter((name) => !process.env[name] || !process.env[name].trim())
 }
 
-module.exports = { missingConfig, REQUIRED_ENV }
+// Browsers send Origin as scheme://host[:port] in lower case with no trailing
+// slash. Normalise the configured list the same way so a value pasted from the
+// Vercel dashboard (often with a trailing '/') still matches.
+function normalizeOrigin(origin) {
+  return origin.trim().replace(/\/+$/, '').toLowerCase()
+}
+
+function parseAllowedOrigins(value) {
+  const origins = (value || '').split(',').map(normalizeOrigin).filter(Boolean)
+  return origins.length ? origins : ['http://localhost:5173']
+}
+
+module.exports = { missingConfig, parseAllowedOrigins, REQUIRED_ENV }

@@ -1,7 +1,7 @@
 const express = require('express')
 const cors = require('cors')
 const connectDB = require('./lib/db')
-const { missingConfig } = require('./lib/config')
+const { missingConfig, parseAllowedOrigins } = require('./lib/config')
 
 const app = express()
 
@@ -9,10 +9,7 @@ const app = express()
 // (used as the rate-limit key) instead of the proxy's.
 app.set('trust proxy', 1)
 
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean)
+const allowedOrigins = parseAllowedOrigins(process.env.ALLOWED_ORIGINS)
 
 app.use(cors({ origin: allowedOrigins }))
 app.use(express.json({ limit: '100kb' }))

@@ -14,6 +14,9 @@ const LIMITS = { name: 100, email: 254, password: 72, regNumber: 20, room: 20, d
 const normalizedEmail = (req) => String(req.body?.email || '').trim().toLowerCase()
 
 // Backend only (not mirrored in the frontend). Counters live in MongoDB.
+// The per-account limit (IP + email) stops password guessing. The per-IP limits
+// are deliberately generous: hostel WiFi puts many students behind one NAT IP,
+// so they only catch one machine hammering the API.
 const RATE_LIMITS = {
   loginPerIpEmail: {
     name: 'login-ip-email',
@@ -24,13 +27,13 @@ const RATE_LIMITS = {
   loginPerIp: {
     name: 'login-ip',
     windowMs: 15 * 60 * 1000,
-    max: 50,
+    max: 300,
     keyFn: (req) => req.ip
   },
   registerPerIp: {
     name: 'register-ip',
     windowMs: 60 * 60 * 1000,
-    max: 10,
+    max: 100,
     keyFn: (req) => req.ip
   }
 }

@@ -13,9 +13,9 @@ const email = (process.env.SEED_WARDEN_EMAIL || 'warden@vithostel.com').trim().t
 
 async function seed() {
   // Check the password before connecting so a bad config never touches the DB
-  const precheck = resolvePassword(process.env)
-  if (precheck.error) {
-    console.error(`Seed aborted: ${precheck.error}`)
+  const passwordResult = resolvePassword(process.env)
+  if (passwordResult.error) {
+    console.error(`Seed aborted: ${passwordResult.error}`)
     process.exitCode = 1
     return
   }
@@ -23,7 +23,7 @@ async function seed() {
   await connectDB()
 
   const existingUser = await User.findOne({ email })
-  const plan = planSeed({ env: process.env, existingUser })
+  const plan = planSeed({ passwordResult, existingUser })
 
   if (plan.action === 'abort') {
     console.error(`Seed aborted: ${plan.reason} (${email}). No changes made.`)

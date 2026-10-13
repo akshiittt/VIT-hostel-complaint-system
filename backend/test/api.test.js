@@ -264,7 +264,8 @@ test('login is rate limited per IP + email', async () => {
 })
 
 test('register is rate limited per IP', async () => {
-  for (let i = 0; i < 10; i++) {
+  const { max } = require('../lib/constants').RATE_LIMITS.registerPerIp
+  for (let i = 0; i < max; i++) {
     const res = await request(app).post('/api/auth/register').send({})
     assert.equal(res.status, 400, `attempt ${i + 1}`)
   }
@@ -272,6 +273,29 @@ test('register is rate limited per IP', async () => {
   assert.equal(blocked.status, 429)
   assert.ok(blocked.headers['retry-after'])
   assert.equal(await User.countDocuments(), 0)
+})
+
+test('per-IP limits leave room for a hostel sharing one NAT IP', () => {
+  const { RATE_LIMITS } = require('../lib/constants')
+  // Hostel WiFi puts many students behind one public IP; per-IP caps must be
+  // far above what one person would hit, the per-account cap does the real work
+  assert.ok(RATE_LIMITS.loginPerIp.max >= 300, 'login per IP too strict for campus NAT')
+  assert.ok(RATE_LIMITS.registerPerIp.max >= 100, 'register per IP too strict for campus NAT')
+  assert.equal(RATE_LIMITS.loginPerIpEmail.max, 10)
+})
+
+test('register accepts an email with surrounding whitespace', async () => {
+  const res = await request(app).post('/api/auth/register').send({ ...student, email: '  Spaced@Example.com ' })
+  assert.equal(res.status, 201, JSON.stringify(res.body))
+  assert.equal(res.body.user.email, 'spaced@example.com')
+})
+
+test('tokens signed with another algorithm are rejected', async () => {
+  const jwt = require('jsonwebtoken')
+  const { user } = await registerStudent()
+  const hs512 = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { algorithm: 'HS512' })
+  const res = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${hs512}`)
+  assert.equal(res.status, 401)
 })
 
 // --- error handler ---

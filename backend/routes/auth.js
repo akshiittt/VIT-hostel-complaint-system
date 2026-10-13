@@ -8,7 +8,7 @@ const rateLimit = require('../lib/rateLimit')
 
 const router = express.Router()
 
-const generateToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '7d' })
+const generateToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { algorithm: 'HS256', expiresIn: '7d' })
 
 const loginPerIpEmail = rateLimit(RATE_LIMITS.loginPerIpEmail)
 const loginPerIp = rateLimit(RATE_LIMITS.loginPerIp)
@@ -30,7 +30,8 @@ router.post('/register', registerPerIp, async (req, res) => {
   if (tooLong) {
     return res.status(400).json({ message: tooLong })
   }
-  if (!/^\S+@\S+\.\S+$/.test(email)) {
+  const normalizedEmail = email.trim().toLowerCase()
+  if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
     return res.status(400).json({ message: 'Please enter a valid email address' })
   }
   if (password.length < 6) {
@@ -42,13 +43,13 @@ router.post('/register', registerPerIp, async (req, res) => {
 
   // Fast path for the common case. Two simultaneous sign-ups can both pass
   // this check; the unique index then rejects one and app.js turns it into 409.
-  const exists = await User.exists({ email: email.trim().toLowerCase() })
+  const exists = await User.exists({ email: normalizedEmail })
   if (exists) {
     return res.status(409).json({ message: 'An account with this email already exists' })
   }
 
   // Role is always student here; warden accounts are only created by seed.js
-  const user = await User.create({ name, email, password, role: 'student', regNumber, hostelType, block, room })
+  const user = await User.create({ name, email: normalizedEmail, password, role: 'student', regNumber, hostelType, block, room })
 
   res.status(201).json({ token: generateToken(user._id), user: user.toPublic() })
 })

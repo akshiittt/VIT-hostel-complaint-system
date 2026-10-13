@@ -74,6 +74,18 @@ Tick each box only when it's fixed **and** verified: a test for backend changes,
 - [ ] **24. Advisories in dev-only test tooling.** `npm audit` reports 3 (tinypool, @vitest/mocker). They're not in the production bundle. Fixing them needs Vitest 4+/Vite 7+, so revisit with the next Vite upgrade.
 - [x] WardenPanel load error was missing `role="alert"`. Fixed.
 
+## Security check + bug hunt (2026-10-13, second pass)
+
+- **Security review** of `backend/` and `vit-hostel/src`: **no exploitable vulnerabilities** found.
+  - Checked: NoSQL operator injection, mass assignment and role escalation, access to other students' complaints, JWT handling, data leaks, XSS, secrets.
+- **Bug hunt:** 6 findings, all fixed. Backend 37/37, frontend 20/20.
+  - [x] Per-IP rate limits would have blocked a whole hostel behind one shared WiFi IP. Raised to 300 logins per 15 min and 100 sign-ups per hour per IP; the per-account limit (10 per 15 min) still stops password guessing.
+  - [x] An `ALLOWED_ORIGINS` value with a trailing `/` or capital letters silently broke CORS. It's now normalised (`lib/config.js` → `parseAllowedOrigins`).
+  - [x] Sign-up rejected emails with surrounding spaces, such as a trailing space from autocomplete. The email is now trimmed first.
+  - [x] The root `node_modules` (549 files) was committed to git. Untracked it and added a root `.gitignore`.
+  - [x] Token signing and checking now both use HS256 explicitly.
+  - [x] Seed no longer checks the password twice.
+
 ## Accepted decisions (not fixing now)
 
 - **JWT in localStorage, 7-day expiry, no server-side revocation.** Acceptable because there are no XSS sinks (React escaping, no `dangerouslySetInnerHTML`). httpOnly cookies would need SameSite/CSRF handling across two Vercel domains. Revisit if an admin role is added in phase 2.
