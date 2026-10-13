@@ -1,10 +1,6 @@
 ---
 name: user-laptop-dns-srv
 description: "User's Windows laptop DNS (127.0.0.1) refuses SRV lookups, so mongodb+srv connections from local Node fail"
-metadata:
-  node_type: memory
-  type: reference
-  modified: 2026-10-13T08:18:48.781Z
 ---
 
 On the user's laptop, Node's DNS server is 127.0.0.1 (likely a VPN/filter app) and it refuses SRV queries, so any local `mongodb+srv://` connection fails with `querySrv ECONNREFUSED` even though Vercel connects fine.

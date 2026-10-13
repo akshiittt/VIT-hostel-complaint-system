@@ -1,10 +1,6 @@
 ---
 name: vit-hostel-deployment
 description: "Where the VIT hostel app is deployed (Vercel URLs, Atlas cluster, branches) as of 2026-10-13"
-metadata:
-  node_type: memory
-  type: project
-  modified: 2026-10-13T19:56:33.243Z
 ---
 
 VIT hostel complaint system went live on 2026-10-13.
